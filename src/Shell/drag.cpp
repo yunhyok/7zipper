@@ -391,7 +391,9 @@ extern "C" __declspec(dllexport) int __cdecl sz_drag_files(void* ownerHwnd, cons
         if (ownerHwnd && GetWindowThreadProcessId(static_cast<HWND>(ownerHwnd), nullptr) != GetCurrentThreadId())
             return RPC_E_WRONG_THREAD;
         if (activeDrags) return HRESULT_FROM_WIN32(ERROR_BUSY);
-        if (!(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) return DRAGDROP_S_CANCEL;
+        // GetAsyncKeyState reads physical buttons; a drag is held with the logical left button.
+        const int dragButton = GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON;
+        if (!(GetAsyncKeyState(dragButton) & 0x8000)) return DRAGDROP_S_CANCEL;
         if (!oleHeld) {
             hr = OleInitialize(nullptr);
             if (FAILED(hr)) return hr;

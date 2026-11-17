@@ -127,6 +127,43 @@ using (var drag = await service.PrepareDragAsync(archivePlain, [dragEntries.Sing
     Check(drag.Paths.Count == 1 && Directory.Exists(drag.Paths[0]), "folder drag prepared");
     foreach (var (relative, hash) in hashes) Check(Hash(Path.Combine(drag.Paths[0], relative)) == hash, "drag content " + relative);
 }
+var taken = Path.Combine(root, "taken"); Directory.CreateDirectory(taken);
+await service.CreateAsync([Path.Combine(source, "random.bin")], new() { OutputPath = Path.Combine(taken, "set.7z"), VolumeBytes = 65536, Threads = 2 });
+await File.WriteAllTextAsync(Path.Combine(taken, "set (2).7z"), "occupied");
+var renamedOutput = await service.CreateAsync([Path.Combine(source, "random.bin")], new() { OutputPath = Path.Combine(taken, "set.7z"), Threads = 2 });
+Check(renamedOutput.Count == 1 && Path.GetFileName(renamedOutput[0]) == "set (3).7z", "output name skips both a split set and an existing file");
+Check(await File.ReadAllTextAsync(Path.Combine(taken, "set (2).7z")) == "occupied", "existing output left untouched");
+bool streams;
+var probe = Path.Combine(root, "stream-probe.txt"); await File.WriteAllTextAsync(probe, "");
+try { await File.WriteAllTextAsync(probe + ":probe", "x"); streams = true; } catch (IOException) { streams = false; }
+Check(PathSafety.SupportsNamedStreams(root) == streams, "named stream support detected");
+var marked = Path.Combine(root, "marked.zip"); File.Copy(archivePlain, marked);
+if (streams)
+{
+    await File.WriteAllTextAsync(marked + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://example.invalid/\r\n");
+    await service.ExtractAsync(marked, new() { DestinationDirectory = Path.Combine(root, "marked-out"), Mode = ExtractionMode.Here });
+    Check(await File.ReadAllTextAsync(Path.Combine(root, "marked-out", Path.GetFileName(source), "한글.txt") + ":Zone.Identifier") == "[ZoneTransfer]\r\nZoneId=3\r\n", "zone propagated without untrusted text");
+    using var markedDrag = await service.PrepareDragAsync(marked, [dragEntries.Single(x => x.Path.EndsWith("한글.txt")).Index], null);
+    if (PathSafety.SupportsNamedStreams(markedDrag.Directory))
+        Check((await File.ReadAllTextAsync(markedDrag.Paths[0] + ":Zone.Identifier")).Contains("ZoneId=3"), "zone propagated to drag files");
+}
+// Optional: the root of a FAT32 or exFAT volume, which has no alternate data streams.
+var plainRoot = Environment.GetEnvironmentVariable("SEVENZIPPER_TEST_FAT_ROOT");
+if (string.IsNullOrEmpty(plainRoot)) Console.WriteLine("SKIP stream-less volume: SEVENZIPPER_TEST_FAT_ROOT is not set");
+else
+{
+    Console.WriteLine("TEST stream-less volume " + plainRoot);
+    var plainWork = Path.Combine(plainRoot, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(plainWork);
+    Check(!PathSafety.SupportsNamedStreams(plainWork), "volume reports no named streams");
+    await service.ExtractAsync(marked, new() { DestinationDirectory = Path.Combine(plainWork, "out"), Mode = ExtractionMode.Here });
+    foreach (var (relative, hash) in hashes) Check(Hash(Path.Combine(plainWork, "out", Path.GetFileName(source), relative)) == hash, "marked archive extracts to stream-less volume " + relative);
+    var plainArchive = Path.Combine(plainWork, "plain.zip"); File.Copy(archivePlain, plainArchive);
+    await service.ExtractAsync(plainArchive, new() { DestinationDirectory = Path.Combine(root, "from-plain"), Mode = ExtractionMode.Here });
+    foreach (var (relative, hash) in hashes) Check(Hash(Path.Combine(root, "from-plain", Path.GetFileName(source), relative)) == hash, "archive on stream-less volume extracts " + relative);
+    var plainCreated = await service.CreateAsync([source], new() { OutputPath = Path.Combine(plainWork, "created.7z"), Threads = 2 });
+    Check(plainCreated.Count == 1 && File.Exists(plainCreated[0]), "archive created on stream-less volume");
+    Directory.Delete(plainWork, true);
+}
 using (var canceled = new CancellationTokenSource())
 {
     canceled.Cancel(); bool wasCanceled = false;

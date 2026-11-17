@@ -258,6 +258,33 @@ with tempfile.TemporaryDirectory(prefix="7zipper-test-") as where:
     extract(conflict, root / "conflict-out", expected=2)
     assert not list((root / "conflict-out").iterdir())
 
+    # Names without the UTF-8 flag: Unix hosts store UTF-8, other hosts the system OEM code page.
+    def legacy_zip(path, raw_name, system):
+        placeholder = "X" * len(raw_name) + ".txt"
+        info = zipfile.ZipInfo(placeholder)
+        info.create_system = system
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr(info, b"legacy")
+        binary = path.read_bytes()
+        assert binary.count(placeholder.encode()) == 2
+        path.write_bytes(binary.replace(placeholder.encode(), raw_name + b".txt"))
+
+    legacy = root / "unix-utf8.zip"
+    legacy_zip(legacy, name[:-4].encode("utf-8"), 3)
+    assert [row[0] for row in list_names(legacy)] == [name], list_names(legacy)
+    extract(legacy, root / "unix-utf8-out")
+    assert (root / "unix-utf8-out" / name).read_bytes() == b"legacy"
+    oem = f"cp{C.windll.kernel32.GetOEMCP()}"
+    for sample in ("Çüéâäà", "한글명", "日本語"):
+        try:
+            raw = sample.encode(oem)
+        except (LookupError, UnicodeError):
+            continue
+        legacy = root / "oem-name.zip"
+        legacy_zip(legacy, raw, 0)
+        assert [row[0] for row in list_names(legacy)] == [sample + ".txt"], (oem, list_names(legacy))
+        break
+
     apart = root / "corrupt-data.zip"
     with zipfile.ZipFile(apart, "w", compression=zipfile.ZIP_STORED) as archive:
         archive.writestr("x", b"correct")

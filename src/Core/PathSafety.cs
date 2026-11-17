@@ -19,6 +19,20 @@ public static partial class PathSafety
         if (result.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + result[8..];
         return result.StartsWith(@"\\?\", StringComparison.Ordinal) ? result[4..] : result;
     }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern bool GetVolumeInformationW(string root, IntPtr volumeName, uint volumeNameLength,
+        IntPtr serialNumber, IntPtr maximumComponentLength, out uint fileSystemFlags, IntPtr fileSystemName, uint fileSystemNameLength);
+    // FAT, exFAT and some network shares have no alternate data streams. An unknown volume counts as
+    // capable, so a real stream failure there still surfaces.
+    public static bool SupportsNamedStreams(string path)
+    {
+        var root = Path.GetPathRoot(Path.GetFullPath(path));
+        if (string.IsNullOrEmpty(root)) return true;
+        if (!Path.EndsInDirectorySeparator(root)) root += Path.DirectorySeparatorChar;
+        const uint namedStreams = 0x00040000;
+        return !GetVolumeInformationW(root, IntPtr.Zero, 0, IntPtr.Zero, IntPtr.Zero, out uint flags, IntPtr.Zero, 0)
+            || (flags & namedStreams) != 0;
+    }
     [GeneratedRegex(@"^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[0-9¹²³]|LPT[0-9¹²³])(?:\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DeviceName();
 
