@@ -1,9 +1,12 @@
+using System.ComponentModel;
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
+using Microsoft.Win32.SafeHandles;
 using SevenZipper.Core;
 
 namespace SevenZipper.App;
@@ -23,8 +26,8 @@ public static class Program
         try
         {
             var request = ReadRequest(args);
-            var identity = WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName;
-            var pipeName = "7Zipper-" + identity;
+            using var identity = WindowsIdentity.GetCurrent();
+            var pipeName = GetInstanceName(identity);
             using var mutex = new Mutex(true, "Local\\" + pipeName, out bool primary);
             if (!primary) { SendRequest(pipeName, request); return 0; }
             using var stop = new CancellationTokenSource();
@@ -50,6 +53,23 @@ public static class Program
             return 1;
         }
     }
+
+    private static string GetInstanceName(WindowsIdentity identity)
+    {
+        const int TokenSessionId = 12, TokenElevation = 20;
+        if (!GetTokenInformation(identity.AccessToken, TokenSessionId, out var session, sizeof(uint), out _)
+            || !GetTokenInformation(identity.AccessToken, TokenElevation, out var elevated, sizeof(uint), out _))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+
+        return InstanceName(identity.User?.Value ?? Environment.UserName, session, elevated != 0);
+    }
+
+    private static string InstanceName(string account, uint session, bool elevated) =>
+        FormattableString.Invariant($"7Zipper-{account}-{session}-{(elevated ? "elevated" : "standard")}");
+
+    [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
+    private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass,
+        out uint information, uint length, out uint returnedLength);
 
     private static ShellRequest ReadRequest(string[] args)
     {
@@ -120,7 +140,7 @@ public static class Program
 
     private static void Dispatch(App app, ShellRequest request)
     {
-        var window = app.Windows.OfType<MainWindow>().FirstOrDefault();
+        var window = app.Windows.OfType<MainWindow>().FirstOrDefault(candidate => !candidate.IsClosing);
         if (window == null) { window = new MainWindow(); window.Show(); }
         if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
         window.Activate();

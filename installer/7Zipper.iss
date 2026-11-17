@@ -1,4 +1,4 @@
-#define AppVersion "0.1.2"
+#define AppVersion "0.1.3"
 #define ShellClsid "9DF247FA-3897-4193-8F57-58062056862D"
 #ifndef PublishDir
   #define PublishDir "..\artifacts\publish"
@@ -55,6 +55,7 @@ Name: "{autoprograms}\7Zipper"; Filename: "{app}\7Zipper.exe"; WorkingDir: "{app
 Root: HKA; Subkey: "Software\Classes\AllFilesystemObjects\shell\7Zipper"; Flags: deletekey; Tasks: not contextmenu
 Root: HKA; Subkey: "Software\Classes\CLSID\{{{#ShellClsid}}"; Flags: deletekey; Tasks: not contextmenu
 Root: HKA; Subkey: "Software\Classes\AllFilesystemObjects\shell\7Zipper"; ValueType: string; ValueName: "MUIVerb"; ValueData: "7Zipper"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\AllFilesystemObjects\shell\7Zipper"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\7Zipper.exe"",0"; Tasks: contextmenu
 Root: HKA; Subkey: "Software\Classes\AllFilesystemObjects\shell\7Zipper"; ValueType: string; ValueName: "ExplorerCommandHandler"; ValueData: "{{{#ShellClsid}}"; Tasks: contextmenu
 Root: HKA; Subkey: "Software\Classes\AllFilesystemObjects\shell\7Zipper"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: contextmenu
 Root: HKA; Subkey: "Software\Classes\CLSID\{{{#ShellClsid}}"; ValueType: string; ValueData: "7Zipper shell commands"; Flags: uninsdeletekey; Tasks: contextmenu

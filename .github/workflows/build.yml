@@ -53,6 +53,28 @@ jobs:
       - name: Build, test and package
         shell: pwsh
         run: ./scripts/build.ps1 -Test -Publish -Installer
+      - name: Test real packaged app commands
+        shell: pwsh
+        run: |
+          $verifier = (Get-Command 7z.exe -ErrorAction Stop).Source
+          $app = Join-Path $PWD 'artifacts/publish/7Zipper.exe'
+          if (Get-Process 7Zipper -ErrorAction SilentlyContinue) { throw 'Unexpected existing application.' }
+          try {
+            foreach ($verb in 'compress-7z','compress-zip','extract-here','extract-smart') {
+              & ./build/shell/tests/shell_installed.exe artifacts $verifier library $verb ./artifacts/publish/SevenZipper.Shell.dll
+              if ($LASTEXITCODE -ne 0) { throw "Packaged app command failed: $verb" }
+            }
+          } finally {
+            Get-Process 7Zipper -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $app } | ForEach-Object {
+              if (-not $_.CloseMainWindow() -or -not $_.WaitForExit(10000)) { throw 'Test application did not close.' }
+            }
+          }
+      - name: Test installer in disposable runner
+        shell: pwsh
+        run: |
+          [xml]$properties = Get-Content Directory.Build.props
+          $version = $properties.Project.PropertyGroup.Version
+          ./tests/shell/installer-smoke.ps1 -Installer "dist/7Zipper-Setup-$version-x64.exe" -DisposableEnvironment
       - uses: actions/upload-artifact@v4
         if: success()
         with:

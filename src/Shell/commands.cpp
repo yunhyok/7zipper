@@ -188,13 +188,15 @@ public:
         return SHStrDupW(commands[id_].title, result);
     }
     HRESULT STDMETHODCALLTYPE GetIcon(IShellItemArray*, LPWSTR* result) override {
+        if (!result) return E_POINTER;
         *result = nullptr;
         if (id_ != menu) return E_NOTIMPL;
         try {
             auto path = ModulePath();
             const auto slash = path.find_last_of(L'\\');
             if (slash == std::wstring::npos) return E_FAIL;
-            path.replace(slash + 1, std::wstring::npos, L"7zipper.ico");
+            path.replace(slash + 1, std::wstring::npos, L"7Zipper.exe");
+            path = L"\"" + path + L"\",0";
             return SHStrDupW(path.c_str(), result);
         } catch (const std::bad_alloc&) { return E_OUTOFMEMORY; }
     }
