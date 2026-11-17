@@ -216,7 +216,7 @@ public:
     DataObject(std::vector<std::byte> drop, Staging stage) noexcept
         : stage_(std::move(stage)), drop_(std::move(drop)) {}
     ~DataObject() {
-        if (!knownOutcome_ || transfer_ == running || transfer_ == failed) stage_.Preserve();
+        if (!knownOutcome_ || transfer_ == failed || (transfer_ == running && !performedCopy_)) stage_.Preserve();
     }
 
     void SetOutcome(HRESULT hr, DWORD effect) noexcept {
@@ -279,7 +279,17 @@ public:
         if (!format || !medium) return E_POINTER;
         if (!format->cfFormat || (format->cfFormat != performed_ && format->cfFormat != pasteSucceeded_))
             return DV_E_FORMATETC;
-        if (medium->tymed != TYMED_HGLOBAL) return DV_E_TYMED;
+        if (format->dwAspect != DVASPECT_CONTENT) return DV_E_DVASPECT;
+        if (format->lindex != -1) return DV_E_LINDEX;
+        if (!(format->tymed & TYMED_HGLOBAL) || medium->tymed != TYMED_HGLOBAL) return DV_E_TYMED;
+        if (!medium->hGlobal || GlobalSize(medium->hGlobal) < sizeof(DWORD)) return DV_E_STGMEDIUM;
+        const auto value = GlobalLock(medium->hGlobal);
+        if (!value) return DV_E_STGMEDIUM;
+        DWORD effect;
+        std::memcpy(&effect, value, sizeof(effect));
+        GlobalUnlock(medium->hGlobal);
+        // Explorer may report the completed copy here without calling EndOperation.
+        if (format->cfFormat == performed_) performedCopy_ = effect == DROPEFFECT_COPY;
         if (release) ReleaseStgMedium(medium);
         return S_OK;
     }
@@ -323,7 +333,7 @@ private:
     std::vector<std::byte> drop_;
     std::atomic<ULONG> refs_{1};
     std::atomic<Transfer> transfer_{idle};
-    std::atomic<bool> async_{false}, knownOutcome_{false};
+    std::atomic<bool> async_{false}, knownOutcome_{false}, performedCopy_{false};
     CLIPFORMAT preferred_ = static_cast<CLIPFORMAT>(RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT));
     CLIPFORMAT performed_ = static_cast<CLIPFORMAT>(RegisterClipboardFormatW(CFSTR_PERFORMEDDROPEFFECT));
     CLIPFORMAT pasteSucceeded_ = static_cast<CLIPFORMAT>(RegisterClipboardFormatW(CFSTR_PASTESUCCEEDED));

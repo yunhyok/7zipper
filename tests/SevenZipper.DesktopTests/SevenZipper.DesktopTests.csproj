@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>../../src/App/app.manifest</ApplicationManifest>
+    <PlatformTarget>x64</PlatformTarget>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/App/SevenZipper.App.csproj" />
+    <None Include="../../build/native/SevenZipper.Native.dll" Link="SevenZipper.Native.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../build/shell/SevenZipper.Shell.dll" Link="SevenZipper.Shell.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

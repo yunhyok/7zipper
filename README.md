@@ -28,7 +28,7 @@ Windows용 7z·ZIP 압축 프로그램. 공식 LZMA SDK와 Zstandard 기반 네�
 | 알아서풀기 | 단일 파일·단일 최상위 폴더는 지정 위치에 해제. 여러 최상위 항목은 압축파일 이름의 새 폴더에 해제 |
 | 드래그앤드롭 | 파일·폴더를 넣어 압축, 압축파일을 넣어 열기, 내부 항목을 탐색기로 끌어내어 해제 |
 
-ZIP Zstandard는 압축 방식 93을 지원하는 프로그램 필요. UTF-8 표시가 없는 ZIP 파일명은 Unix·macOS 작성본이면 UTF-8, 그 외는 Windows OEM 코드페이지(한국어 Windows는 CP949)로 해석. 7z 읽기는 공식 LZMA SDK에 포함된 LZMA/LZMA2/PPMd/Copy 및 필터에 한정. Deflate64 ZIP, SDK에 없는 7z 코덱, RAR·EGG·ALZ는 미지원.
+ZIP Zstandard는 압축 방식 93을 지원하는 프로그램 필요. 7z 읽기는 공식 LZMA SDK에 포함된 LZMA/LZMA2/PPMd/Copy 및 필터에 한정. Deflate64 ZIP, SDK에 없는 7z 코덱, RAR·EGG·ALZ는 미지원.
 
 분할 파일은 같은 폴더에 모두 보관할 것. 7z는 첫 `.001`, ZIP은 마지막 `.zip`으로 열기. 다른 조각을 선택해도 시작 파일 자동 검색.
 
@@ -63,7 +63,7 @@ pwsh ./scripts/build.ps1 -Test -Publish -Installer
 dotnet run --project tests/SevenZipper.Tests -c Release -- --managed
 ```
 
-네이티브 엔진 검사, UI·배포 검증 범위와 실측 결과는 [검증 기록](docs/validation.md) 참조.
+최신 파일명·드래그 검사는 [v0.1.2 검증 기록](docs/validation-v0.1.2.md), 네이티브 엔진·UI·성능 실측 결과는 [초기 검증 기록](docs/validation.md) 참조.
 
 ## 05 / 구성 및 라이선스
 

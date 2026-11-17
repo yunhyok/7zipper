@@ -86,5 +86,57 @@ int wmain() {
     assert(sz_drag_active() == 0 && fs::exists(unknown));
     { Staging cleanTestJob; assert(SUCCEEDED(cleanTestJob.Open(unknown.native()))); }
     assert(!fs::exists(unknown));
+
+    const struct {
+        const wchar_t* format = CFSTR_PERFORMEDDROPEFFECT;
+        DWORD effect = DROPEFFECT_COPY;
+        bool malformed = false, laterFailure = false, unknownOutcome = false, cleaned = false;
+    } notifications[] = {
+        {.cleaned = true}, // Explorer reports the performed copy without calling EndOperation.
+        {.laterFailure = true},
+        {.unknownOutcome = true},
+        {.format = CFSTR_LOGICALPERFORMEDDROPEFFECT},
+        {.format = CFSTR_PASTESUCCEEDED},
+        {.effect = DROPEFFECT_NONE},
+        {.malformed = true},
+    };
+    for (const auto& notification : notifications) {
+        const auto jobPath = NewStage();
+        Staging pending;
+        assert(SUCCEEDED(pending.Open(jobPath.native())));
+        auto object = new DataObject({}, std::move(pending));
+        assert(SUCCEEDED(object->StartOperation(nullptr)));
+        if (!notification.unknownOutcome) object->SetOutcome(DRAGDROP_S_DROP, DROPEFFECT_COPY);
+
+        FORMATETC reported{static_cast<CLIPFORMAT>(RegisterClipboardFormatW(notification.format)),
+                           nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+        STGMEDIUM report{};
+        report.tymed = TYMED_HGLOBAL;
+        report.hGlobal = GlobalAlloc(GMEM_MOVEABLE, notification.malformed ? 0 : sizeof(DWORD));
+        assert(report.hGlobal);
+        if (notification.malformed) assert(GlobalSize(report.hGlobal) == 0);
+        else {
+            auto value = static_cast<DWORD*>(GlobalLock(report.hGlobal));
+            assert(value);
+            *value = notification.effect;
+            GlobalUnlock(report.hGlobal);
+        }
+        const auto notified = object->SetData(&reported, &report, FALSE);
+        if (!notification.malformed && std::wstring_view(notification.format) != CFSTR_LOGICALPERFORMEDDROPEFFECT)
+            assert(SUCCEEDED(notified));
+        ReleaseStgMedium(&report);
+        if (notification.laterFailure) assert(SUCCEEDED(object->EndOperation(E_FAIL, nullptr, DROPEFFECT_NONE)));
+
+        FORMATETC preferred{static_cast<CLIPFORMAT>(RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT)),
+                            nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+        STGMEDIUM held{};
+        assert(SUCCEEDED(object->GetData(&preferred, &held)));
+        object->Release();
+        assert(sz_drag_active() == 1 && fs::exists(jobPath));
+        ReleaseStgMedium(&held);
+        assert(sz_drag_active() == 0 && fs::exists(jobPath) == !notification.cleaned);
+        if (!notification.cleaned) { Staging cleanTestJob; assert(SUCCEEDED(cleanTestJob.Open(jobPath.native()))); }
+        assert(!fs::exists(jobPath));
+    }
     OleUninitialize();
 }
