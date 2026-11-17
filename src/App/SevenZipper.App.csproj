@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>7Zipper</AssemblyName>
+    <RootNamespace>SevenZipper.App</RootNamespace>
+    <StartupObject>SevenZipper.App.Program</StartupObject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon Condition="Exists('../../assets/7zipper.ico')">../../assets/7zipper.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/SevenZipper.Core.csproj" />
+  </ItemGroup>
+</Project>

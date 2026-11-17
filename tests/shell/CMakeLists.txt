@@ -1,0 +1,15 @@
+foreach(test drag_lifetime shell_wire)
+    add_executable(${test} ${test}.cpp)
+    target_include_directories(${test} PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_features(${test} PRIVATE cxx_std_20)
+    target_compile_definitions(${test} PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+    target_compile_options(${test} PRIVATE /W4 /utf-8 /permissive-)
+    target_link_libraries(${test} PRIVATE ntdll ole32 shell32 shlwapi user32 uuid)
+endforeach()
+
+add_test(NAME drag_lifetime COMMAND drag_lifetime)
+add_test(NAME shell_wire COMMAND shell_wire "$<TARGET_FILE:SevenZipper.Shell>")
+set_tests_properties(drag_lifetime shell_wire PROPERTIES TIMEOUT 20)
+add_dependencies(shell_wire SevenZipper.Shell)
+add_custom_command(TARGET shell_wire POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:shell_wire>" "$<TARGET_FILE_DIR:shell_wire>/7Zipper.exe")

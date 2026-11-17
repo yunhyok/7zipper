@@ -1,0 +1,130 @@
+<Application x:Class="SevenZipper.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ThemeMode="Dark">
+    <Application.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibility" />
+        <SolidColorBrush x:Key="CanvasBrush" Color="#202226" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#2B2E34" />
+        <SolidColorBrush x:Key="InputBrush" Color="#1D2025" />
+        <SolidColorBrush x:Key="EditorBrush" Color="#15181D" />
+        <SolidColorBrush x:Key="TextBrush" Color="#ECEEF1" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#B9C0CC" />
+        <SolidColorBrush x:Key="LineBrush" Color="#41464F" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#386CB0" />
+        <SolidColorBrush x:Key="FocusBrush" Color="#8FC1FF" />
+        <SolidColorBrush x:Key="SelectionBrush" Color="#263F63" />
+        <SolidColorBrush x:Key="ErrorBrush" Color="#FFA8A8" />
+        <Style x:Key="AppWindow" TargetType="Window">
+            <Setter Property="Background" Value="{StaticResource CanvasBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontFamily" Value="Segoe UI, Malgun Gothic" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="UseLayoutRounding" Value="True" />
+            <Setter Property="Language" Value="ko-KR" />
+        </Style>
+        <Style x:Key="DialogWindow" TargetType="Window" BasedOn="{StaticResource AppWindow}">
+            <Setter Property="ShowInTaskbar" Value="False" />
+        </Style>
+        <Style x:Key="Heading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="23" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="Muted" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style x:Key="Icon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="AppPanel" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style x:Key="Action" TargetType="Button">
+            <Setter Property="Background" Value="#353941" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="MinWidth" Value="34" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" CornerRadius="4" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#454B55" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#282C32" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{StaticResource FocusBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Background" Value="#282B30" />
+                                <Setter Property="Foreground" Value="#949DAA" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PrimaryAction" TargetType="Button" BasedOn="{StaticResource Action}">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="#6695D1" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="NavAction" TargetType="Button" BasedOn="{StaticResource Action}">
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource InputBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource TextBrush}" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource FocusBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="PasswordField" TargetType="PasswordBox">
+            <Setter Property="Background" Value="{StaticResource InputBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource TextBrush}" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="DialogLabel" TargetType="Label">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style x:Key="DialogError" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="AutomationProperties.LiveSetting" Value="Assertive" />
+        </Style>
+    </Application.Resources>
+</Application>

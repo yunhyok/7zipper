@@ -1,0 +1,138 @@
+{
+  "logical_processors": 20,
+  "repeats": 3,
+  "rows": [
+    {
+      "format": "7z LZMA2",
+      "threads": 1,
+      "input_mib": 256,
+      "compression_seconds": 17.92429400002584,
+      "extraction_seconds": 3.653925099875778,
+      "output_bytes": 54321088,
+      "compression_runs": [
+        17.92429400002584,
+        20.378975600004196,
+        17.501839499920607
+      ],
+      "extraction_runs": [
+        3.653925099875778,
+        3.6658067000098526,
+        3.0427608001045883
+      ],
+      "compression_cpu_seconds": 17.890625,
+      "extraction_cpu_seconds": 3.546875,
+      "peak_compression_working_mib": 203.27734375,
+      "peak_extraction_working_mib": 35.8359375
+    },
+    {
+      "format": "7z LZMA2",
+      "threads": 20,
+      "input_mib": 256,
+      "compression_seconds": 1.4496316001750529,
+      "extraction_seconds": 1.0716972001828253,
+      "output_bytes": 54370764,
+      "compression_runs": [
+        1.4693231997080147,
+        1.4367154003120959,
+        1.4496316001750529
+      ],
+      "extraction_runs": [
+        1.0505600003525615,
+        1.0716972001828253,
+        1.0841459999792278
+      ],
+      "compression_cpu_seconds": 10.84375,
+      "extraction_cpu_seconds": 3.625,
+      "peak_compression_working_mib": 988.80859375,
+      "peak_extraction_working_mib": 327.2421875
+    },
+    {
+      "format": "ZIP Deflate",
+      "threads": 1,
+      "input_mib": 256,
+      "compression_seconds": 2.3527099997736514,
+      "extraction_seconds": 0.4351822999306023,
+      "output_bytes": 56958339,
+      "compression_runs": [
+        2.369744900148362,
+        2.2958543999120593,
+        2.3527099997736514
+      ],
+      "extraction_runs": [
+        0.4342185999266803,
+        0.4513304000720382,
+        0.4351822999306023
+      ],
+      "compression_cpu_seconds": 2.34375,
+      "extraction_cpu_seconds": 0.421875,
+      "peak_compression_working_mib": 19.546875,
+      "peak_extraction_working_mib": 19.5703125
+    },
+    {
+      "format": "ZIP Deflate",
+      "threads": 20,
+      "input_mib": 256,
+      "compression_seconds": 0.40376649983227253,
+      "extraction_seconds": 0.06417020037770271,
+      "output_bytes": 56958339,
+      "compression_runs": [
+        0.41649230010807514,
+        0.40376649983227253,
+        0.3990759998559952
+      ],
+      "extraction_runs": [
+        0.06417020037770271,
+        0.06939239986240864,
+        0.06381529988721013
+      ],
+      "compression_cpu_seconds": 4.0,
+      "extraction_cpu_seconds": 0.671875,
+      "peak_compression_working_mib": 31.33203125,
+      "peak_extraction_working_mib": 27.14453125
+    },
+    {
+      "format": "ZIP Zstandard",
+      "threads": 1,
+      "input_mib": 256,
+      "compression_seconds": 0.5368035999126732,
+      "extraction_seconds": 0.3044676003046334,
+      "output_bytes": 54785119,
+      "compression_runs": [
+        0.5368035999126732,
+        0.49349990021437407,
+        0.5564461001195014
+      ],
+      "extraction_runs": [
+        0.3044676003046334,
+        0.2982149003073573,
+        0.32671659998595715
+      ],
+      "compression_cpu_seconds": 0.53125,
+      "extraction_cpu_seconds": 0.28125,
+      "peak_compression_working_mib": 29.4375,
+      "peak_extraction_working_mib": 28.6015625
+    },
+    {
+      "format": "ZIP Zstandard",
+      "threads": 20,
+      "input_mib": 256,
+      "compression_seconds": 0.186120199970901,
+      "extraction_seconds": 0.06717830011621118,
+      "output_bytes": 54785119,
+      "compression_runs": [
+        0.2047987999394536,
+        0.186120199970901,
+        0.1833397001028061
+      ],
+      "extraction_runs": [
+        0.06717830011621118,
+        0.0600470001809299,
+        0.06753750005736947
+      ],
+      "compression_cpu_seconds": 1.140625,
+      "extraction_cpu_seconds": 0.609375,
+      "peak_compression_working_mib": 86.28515625,
+      "peak_extraction_working_mib": 61.02734375
+    }
+  ]
+}

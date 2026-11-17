@@ -1,0 +1,13 @@
+.tools/
+third_party/
+build/
+artifacts/
+dist/
+**/bin/
+**/obj/
+*.user
+.vs/
+test-results/
+*.pfx
+*.cer
+__pycache__/

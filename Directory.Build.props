@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Company>Yunhyok Choi</Company>
+    <Product>7Zipper</Product>
+    <Copyright>Copyright (c) 2026 Yunhyok Choi</Copyright>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+</Project>

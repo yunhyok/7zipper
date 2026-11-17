@@ -1,0 +1,110 @@
+<Window x:Class="SevenZipper.App.CompressionDialog" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="새 압축" Style="{StaticResource DialogWindow}" WindowStartupLocation="CenterOwner"
+        Width="586" Height="770" MinWidth="400" MinHeight="310">
+    <DockPanel Margin="18">
+        <TextBlock DockPanel.Dock="Top" Text="새 압축" Style="{StaticResource Heading}" Margin="0,0,0,12" />
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <TextBlock x:Name="ErrorText" Style="{StaticResource DialogError}" Visibility="Collapsed" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="취소" IsCancel="True" Style="{StaticResource Action}" Margin="0,0,6,0" />
+                <Button Content="압축 시작" Click="OnAccept" IsDefault="True" Style="{StaticResource PrimaryAction}" />
+            </StackPanel>
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,7,0">
+                <Border Style="{StaticResource AppPanel}" Padding="12" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="압축할 항목" Style="{StaticResource SectionTitle}" />
+                        <WrapPanel Margin="0,8,0,6">
+                            <Button Content="파일 추가" Click="OnAddFiles" Style="{StaticResource NavAction}" Margin="0,0,6,0" />
+                            <Button Content="폴더 추가" Click="OnAddFolders" Style="{StaticResource NavAction}" Margin="0,0,6,0" />
+                            <Button x:Name="RemoveButton" Content="선택 제거" Click="OnRemove" Style="{StaticResource NavAction}" IsEnabled="False" />
+                        </WrapPanel>
+                        <ListBox x:Name="InputList" Height="70" SelectionMode="Extended" SelectionChanged="OnInputSelection"
+                                 Background="{StaticResource EditorBrush}" BorderBrush="{StaticResource LineBrush}"
+                                 Foreground="{StaticResource TextBrush}" AutomationProperties.Name="압축할 경로 목록"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource AppPanel}" Padding="12" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="형식 및 저장 위치" Style="{StaticResource SectionTitle}" Margin="0,0,0,9" />
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <Label Content="압축 형식" Target="{Binding ElementName=FormatBox}" Style="{StaticResource DialogLabel}" />
+                                <ComboBox x:Name="FormatBox" MinHeight="32" SelectionChanged="OnFormatChanged" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <Label Content="압축 수준" Target="{Binding ElementName=LevelBox}" Style="{StaticResource DialogLabel}" />
+                                <ComboBox x:Name="LevelBox" MinHeight="32" />
+                            </StackPanel>
+                        </Grid>
+                        <CheckBox x:Name="PerFolderBox" Content="폴더별로 압축 파일 만들기" Margin="0,0,0,8"
+                                  Checked="OnPerFolderChanged" Unchecked="OnPerFolderChanged" />
+                        <Label x:Name="OutputLabel" Content="저장할 압축 파일 경로" Target="{Binding ElementName=OutputBox}" Style="{StaticResource DialogLabel}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="찾아보기…" Click="OnBrowseOutput" Style="{StaticResource NavAction}" Margin="6,0,0,0" />
+                            <TextBox x:Name="OutputBox" Style="{StaticResource Field}" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource AppPanel}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="암호 및 분할" Style="{StaticResource SectionTitle}" Margin="0,0,0,9" />
+                        <Label Content="암호 (선택)" Target="{Binding ElementName=PasswordInput}" Style="{StaticResource DialogLabel}" />
+                        <PasswordBox x:Name="PasswordInput" Style="{StaticResource PasswordField}" PasswordChanged="OnPasswordChanged" />
+                        <CheckBox x:Name="EncryptHeadersBox" Content="파일 이름도 암호화 (7z)" Margin="0,7,0,9" IsEnabled="False" />
+                        <Label Content="분할 크기" Target="{Binding ElementName=VolumeBox}" Style="{StaticResource DialogLabel}" />
+                        <ComboBox x:Name="VolumeBox" SelectionChanged="OnVolumeChanged" MinHeight="32" />
+                        <Grid x:Name="CustomVolume" Visibility="Collapsed" Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="92" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="VolumeAmount" Style="{StaticResource Field}" AutomationProperties.Name="사용자 지정 분할 크기" />
+                            <ComboBox x:Name="VolumeUnit" Grid.Column="2" SelectedIndex="1" AutomationProperties.Name="분할 크기 단위">
+                                <ComboBoxItem Content="KiB" />
+                                <ComboBoxItem Content="MiB" />
+                                <ComboBoxItem Content="GiB" />
+                            </ComboBox>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Expander Header="성능 설정" Margin="0,6,0,0">
+                    <Grid Margin="10,4,10,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <Label Content="CPU 스레드 수" Target="{Binding ElementName=ThreadsBox}" Style="{StaticResource DialogLabel}" />
+                            <TextBox x:Name="ThreadsBox" Style="{StaticResource Field}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <Label Content="메모리 한도 (MiB, 0 = 자동)" Target="{Binding ElementName=MemoryBox}" Style="{StaticResource DialogLabel}" />
+                            <TextBox x:Name="MemoryBox" Text="0" Style="{StaticResource Field}" />
+                        </StackPanel>
+                    </Grid>
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

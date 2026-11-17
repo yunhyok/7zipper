@@ -1,0 +1,62 @@
+<Window x:Class="SevenZipper.App.ExtractionDialog" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="압축 풀기" Style="{StaticResource DialogWindow}" WindowStartupLocation="CenterOwner"
+        Width="543" Height="594" MinWidth="400" MinHeight="300">
+    <DockPanel Margin="18">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <TextBlock Text="압축 풀기" Style="{StaticResource Heading}" />
+            <TextBlock x:Name="ArchiveLabel" Style="{StaticResource Muted}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <TextBlock x:Name="ErrorText" Style="{StaticResource DialogError}" Visibility="Collapsed" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="취소" IsCancel="True" Style="{StaticResource Action}" Margin="0,0,6,0" />
+                <Button Content="풀기 시작" Click="OnAccept" IsDefault="True" Style="{StaticResource PrimaryAction}" />
+            </StackPanel>
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,7,0">
+                <Border Style="{StaticResource AppPanel}" Padding="12" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="풀 위치" Style="{StaticResource SectionTitle}" Margin="0,0,0,9" />
+                        <Label Content="폴더 경로" Target="{Binding ElementName=DestinationBox}" Style="{StaticResource DialogLabel}" />
+                        <DockPanel Margin="0,0,0,9">
+                            <Button DockPanel.Dock="Right" Content="찾아보기…" Click="OnBrowseDestination"
+                                    Style="{StaticResource NavAction}" Margin="6,0,0,0" />
+                            <TextBox x:Name="DestinationBox" Style="{StaticResource Field}" />
+                        </DockPanel>
+                        <TextBlock x:Name="BatchDestinationHint" Text="비워 두면 각 압축 파일이 있는 폴더에 풉니다."
+                                   Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,9" Visibility="Collapsed" />
+                        <Label Content="폴더 구성" Target="{Binding ElementName=ModeBox}" Style="{StaticResource DialogLabel}" />
+                        <ComboBox x:Name="ModeBox" MinHeight="32" SelectionChanged="OnModeChanged" />
+                        <TextBlock x:Name="ModeHint" Style="{StaticResource Muted}" Margin="0,5,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource AppPanel}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="항목 및 덮어쓰기" Style="{StaticResource SectionTitle}" Margin="0,0,0,9" />
+                        <Grid Margin="0,0,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <Label Content="풀 항목" Target="{Binding ElementName=SelectionBox}" Style="{StaticResource DialogLabel}" />
+                                <ComboBox x:Name="SelectionBox" MinHeight="32" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <Label Content="같은 이름이 있을 때" Target="{Binding ElementName=CollisionBox}" Style="{StaticResource DialogLabel}" />
+                                <ComboBox x:Name="CollisionBox" MinHeight="32" />
+                            </StackPanel>
+                        </Grid>
+                        <Label x:Name="PasswordLabel" Content="암호 (암호화된 압축 파일)" Target="{Binding ElementName=PasswordInput}"
+                               Style="{StaticResource DialogLabel}" />
+                        <PasswordBox x:Name="PasswordInput" Style="{StaticResource PasswordField}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
