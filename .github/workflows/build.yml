@@ -5,6 +5,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub release for the version in Directory.Build.props (main only)
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -25,6 +30,26 @@ jobs:
           if ((Get-FileHash $setup -Algorithm SHA256).Hash -ne '8A5A6711C3766A6E5FB74F280BA0E3551E719CE94538D901FDBD1F8F9920B3F0') { throw 'Inno Setup checksum mismatch.' }
           $install = Start-Process -FilePath $setup -ArgumentList '/PORTABLE=1','/CURRENTUSER','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS',('/DIR="' + (Join-Path $PWD '.tools/inno') + '"') -WindowStyle Hidden -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw 'Inno Setup installation failed.' }
+      - name: Attach a FAT32 volume for the stream-less file system tests
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $image = Join-Path $env:RUNNER_TEMP '7zipper-fat32.vhd'
+          $letter = 'T','U','V','W' | Where-Object { -not (Test-Path "${_}:\") } | Select-Object -First 1
+          $commands = @(
+            "create vdisk file=`"$image`" maximum=256 type=expandable",
+            "select vdisk file=`"$image`"",
+            'attach vdisk',
+            'create partition primary',
+            'format fs=fat32 quick',
+            "assign letter=$letter"
+          )
+          $script = Join-Path $env:RUNNER_TEMP '7zipper-fat32.diskpart'
+          $commands | Set-Content -LiteralPath $script -Encoding ascii
+          diskpart /s $script
+          if ($LASTEXITCODE -eq 0 -and (Test-Path "${letter}:\")) { "SEVENZIPPER_TEST_FAT_ROOT=${letter}:\" >> $env:GITHUB_ENV }
+          else { Write-Output '::warning::The FAT32 test volume is unavailable; the stream-less volume tests are skipped.' }
+          exit 0
       - name: Build, test and package
         shell: pwsh
         run: ./scripts/build.ps1 -Test -Publish -Installer
@@ -34,3 +59,36 @@ jobs:
           name: 7Zipper-win-x64
           path: dist/*
           if-no-files-found: error
+  release:
+    needs: windows
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: 7Zipper-win-x64
+          path: dist
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
+          tag="v$version"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version $version." >&2
+            exit 1
+          fi
+          (cd dist && tr -d '\r' < SHA256SUMS.txt | sha256sum --check --strict -)
+          {
+            cat "docs/release-$tag.md"
+            printf '\n\n자동 빌드·시험·설치판 생성: [Windows CI 통과](%s/%s/actions/runs/%s).\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+          } > release-notes.md
+          gh release create "$tag" "dist/7Zipper-Setup-$version-x64.exe" "dist/7Zipper-$version-win-x64-portable.zip" dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --title "7Zipper $tag" --notes-file release-notes.md --target "$GITHUB_SHA"
