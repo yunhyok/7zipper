@@ -258,8 +258,7 @@ with tempfile.TemporaryDirectory(prefix="7zipper-test-") as where:
     extract(conflict, root / "conflict-out", expected=2)
     assert not list((root / "conflict-out").iterdir())
 
-    # Names without the UTF-8 flag: Unix hosts store UTF-8, other hosts the system OEM code page.
-    def legacy_zip(path, raw_name, system):
+    def check_legacy_name(path, raw_name, system, expected_name):
         placeholder = "X" * len(raw_name) + ".txt"
         info = zipfile.ZipInfo(placeholder)
         info.create_system = system
@@ -268,22 +267,25 @@ with tempfile.TemporaryDirectory(prefix="7zipper-test-") as where:
         binary = path.read_bytes()
         assert binary.count(placeholder.encode()) == 2
         path.write_bytes(binary.replace(placeholder.encode(), raw_name + b".txt"))
+        rows = list_names(path)
+        assert [row[0] for row in rows] == [expected_name], (path.name, rows)
+        out = path.with_suffix("")
+        extract(path, out)
+        assert (out / expected_name).read_bytes() == b"legacy", path.name
 
-    legacy = root / "unix-utf8.zip"
-    legacy_zip(legacy, name[:-4].encode("utf-8"), 3)
-    assert [row[0] for row in list_names(legacy)] == [name], list_names(legacy)
-    extract(legacy, root / "unix-utf8-out")
-    assert (root / "unix-utf8-out" / name).read_bytes() == b"legacy"
-    oem = f"cp{C.windll.kernel32.GetOEMCP()}"
-    for sample in ("Çüéâäà", "한글명", "日本語"):
+    check_legacy_name(root / "unix-utf8.zip", name[:-4].encode("utf-8"), 3, name)
+    oem_page = C.windll.kernel32.GetOEMCP()
+    for sample in ("한글명", "日本語", "Çüéâäà"):
         try:
-            raw = sample.encode(oem)
+            raw = sample.encode(f"cp{oem_page}")
         except (LookupError, UnicodeError):
             continue
-        legacy = root / "oem-name.zip"
-        legacy_zip(legacy, raw, 0)
-        assert [row[0] for row in list_names(legacy)] == [sample + ".txt"], (oem, list_names(legacy))
+        check_legacy_name(root / "oem-name.zip", raw, 0, sample + ".txt")
         break
+    if oem_page in (437, 949):
+        # These DOS names are CP437; the lead bytes have invalid CP949 trails.
+        for raw, expected_name in [(b"\x82", "é.txt"), (b"\x84", "ä.txt"), (b"\x81\x30", "ü0.txt")]:
+            check_legacy_name(root / f"cp437-{raw.hex()}.zip", raw, 0, expected_name)
 
     apart = root / "corrupt-data.zip"
     with zipfile.ZipFile(apart, "w", compression=zipfile.ZIP_STORED) as archive:

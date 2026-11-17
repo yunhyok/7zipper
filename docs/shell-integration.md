@@ -23,7 +23,7 @@ Windows 11 첫 화면의 현대식 메뉴는 이 버전에 등록하지 않음. 
 
 1. 앱에서 선택 항목을 `%LOCALAPPDATA%\7Zipper\Drag\<32자리 GUID>`로 미리 풀 것.
 2. 마우스 버튼을 누른 상태로 끌기 시작. 폴더는 빈 폴더도 포함하며 효과는 복사만 허용.
-3. 완료 또는 취소로 확인되면 마지막 COM·데이터 참조 해제 후 임시 폴더 정리. 비동기 복사는 `EndOperation`도 확인. 완료 여부를 알 수 없으면 보존하며, 남은 임시 폴더는 재부팅 후 새 드래그 작업이 없는 상태에서 직접 삭제할 것.
+3. 완료 또는 취소로 확인되면 마지막 COM·데이터 참조 해제 후 임시 폴더 정리. 비동기 복사는 `EndOperation` 성공 또는 `CFSTR_PERFORMEDDROPEFFECT`의 복사 완료 통지 확인. 명시적 실패나 완료 여부 불명 시 보존하며, 남은 임시 폴더는 재부팅 후 새 드래그 작업이 없는 상태에서 직접 삭제할 것.
 
 앱은 `sz_drag_active()`가 1인 동안 STA 메시지 처리를 유지하고 종료를 보류할 것. `sz_drag_files` 호출 후에는 임시 폴더를 앱이 따로 삭제하지 말 것. 네이티브 정리는 처음 연 폴더의 ID를 검증하며, 열린 부모 핸들을 기준으로만 하위 항목에 접근함. 재분석 지점은 따라가지 않음.
 
@@ -43,7 +43,7 @@ ctest --test-dir artifacts/shell-build --output-on-failure
 ISCC.exe installer/7Zipper.iss
 ```
 
-- 결과: `dist\7Zipper-Setup-0.1.1-x64.exe`.
+- 결과: `dist\7Zipper-Setup-0.1.2-x64.exe`.
 - 기본 경로: `{autopf}\7Zipper` (보통 `C:\Program Files\7Zipper`). 설치 경로 화면에서 폴더와 드라이브 선택 가능. 업데이트는 기존 설치 경로를 기본 표시.
 - Explorer 메뉴 추가 여부를 선택할 수 있음. 연결 프로그램 옵션은 기본 해제. 선택해도 Windows 기본 앱은 변경하지 않음.
 - 설치 관리 시험: `/CURRENTUSER`로 관리자 권한 없이 설치하면 등록 위치가 HKCU로 바뀜. 일반 실행의 기본은 관리자 권한이 필요한 모든 사용자 설치.
@@ -58,8 +58,9 @@ ISCC.exe installer/7Zipper.iss
 | 자동: `drag_lifetime` | Unicode·빈 폴더의 드롭 데이터, 비동기 복사 완료, 데이터 참조 유지, 취소 정리, 결과 불명 시 보존. |
 | Windows 클래식 메뉴 API | 임시 사용자 등록으로 .7z에 5개 항목 활성화, 폴더에 압축 3개 항목 표시 확인. 검사 후 임시 등록 제거. |
 | 빌드 | MSVC x64 Release DLL과 Inno Setup 7.1.1 설치 스크립트 컴파일. |
-| 실제 배포본: 사용자 범위 | 공백을 포함한 사용자 지정 경로 설치, 메뉴와 연결 프로그램 옵션 변경 업데이트, 기본 앱 유지 및 제거 확인. `tests/shell/installer-smoke.ps1 -Installer dist/7Zipper-Setup-0.1.1-x64.exe` |
+| 실제 배포본: 사용자 범위 | 공백을 포함한 사용자 지정 경로 설치, 메뉴와 연결 프로그램 옵션 변경 업데이트, 기본 앱 유지 및 제거 확인. `tests/shell/installer-smoke.ps1 -Installer dist/7Zipper-Setup-0.1.2-x64.exe` |
 | 실기: 관리자 권한 필요 | 프로그램 파일 기본 경로, 다른 드라이브 설치 및 모든 사용자 등록·제거. |
-| 실기: 일반 사용자 | 압축 파일 안에서 Explorer로 실제 드롭, 대용량 복사 중 창 닫기, Esc와 대상 거절 시 정리. |
+| 대화형 자동 검사 | 실제 Explorer로 기본·교체 버튼 드롭과 교체 버튼 Esc 취소, SHA-256·빈 폴더·임시 폴더 정리 확인. [v0.1.2 검증 기록](validation-v0.1.2.md) 참조. |
+| 실기: 추가 검증 필요 | 대용량 복사 중 앱 닫기, 대상 거절 시 정리, Windows 11 드롭. |
 
-참조: [COM 다중 선택](https://learn.microsoft.com/en-us/windows/win32/shell/how-to-employ-the-verb-selection-model), [하위 명령](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-iexplorercommand-enumsubcommands), [Shell 비동기 데이터 전송](https://learn.microsoft.com/en-us/windows/win32/shell/datascenarios#dragging-and-dropping-shell-objects-asynchronously).
+참조: [COM 다중 선택](https://learn.microsoft.com/en-us/windows/win32/shell/how-to-employ-the-verb-selection-model), [하위 명령](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-iexplorercommand-enumsubcommands), [Shell 비동기 데이터 전송](https://learn.microsoft.com/en-us/windows/win32/shell/datascenarios#dragging-and-dropping-shell-objects-asynchronously), [복사 결과 통지](https://learn.microsoft.com/en-us/windows/win32/shell/clipboard#cfstr_performeddropeffect).

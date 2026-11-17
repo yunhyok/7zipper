@@ -497,12 +497,15 @@ static W zip_name(const mz_zip_file& info) {
         extra += length;
         remaining -= length;
     }
-    // Unflagged names follow 7-Zip: Unix and macOS tools write UTF-8, the rest the system OEM code page.
+    if (name.empty()) return {};
+    const auto can_decode = [name](UINT page) {
+        return MultiByteToWideChar(page, MB_ERR_INVALID_CHARS, name.data(), static_cast<int>(name.size()), nullptr, 0) != 0;
+    };
     const auto host = MZ_HOST_SYSTEM(info.version_madeby);
-    if ((host == MZ_HOST_SYSTEM_UNIX || host == MZ_HOST_SYSTEM_OSX_DARWIN) && !name.empty() &&
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name.data(), static_cast<int>(name.size()), nullptr, 0))
+    if ((host == MZ_HOST_SYSTEM_UNIX || host == MZ_HOST_SYSTEM_OSX_DARWIN) && can_decode(CP_UTF8))
         return utf16(name);
-    return utf16(name, CP_OEMCP);
+    // shortcut: ambiguous legacy bytes prefer OEM; add a code page override if users need to choose.
+    return utf16(name, can_decode(CP_OEMCP) ? CP_OEMCP : 437);
 }
 static Entry zip_entry(Zip& zip, const mz_zip_file& info, uint32_t index) {
     if (!info.filename || info.compressed_size < 0 || info.uncompressed_size < 0)
