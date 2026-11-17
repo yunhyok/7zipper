@@ -16,12 +16,18 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.404
-      - name: Build, test and package
+      - name: Install pinned Inno Setup 7
         shell: pwsh
         run: |
-          $env:PATH += ';C:\Program Files (x86)\Inno Setup 6;C:\Program Files\Inno Setup 7'
-          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue)) { throw 'Inno Setup is missing from runner.' }
-          ./scripts/build.ps1 -Test -Publish -Installer
+          New-Item -ItemType Directory -Force .tools/downloads | Out-Null
+          $setup = Join-Path $PWD '.tools/downloads/innosetup-7.1.1-x64.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe' -OutFile $setup
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash -ne '8A5A6711C3766A6E5FB74F280BA0E3551E719CE94538D901FDBD1F8F9920B3F0') { throw 'Inno Setup checksum mismatch.' }
+          $install = Start-Process -FilePath $setup -ArgumentList '/PORTABLE=1','/CURRENTUSER','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS',('/DIR="' + (Join-Path $PWD '.tools/inno') + '"') -WindowStyle Hidden -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw 'Inno Setup installation failed.' }
+      - name: Build, test and package
+        shell: pwsh
+        run: ./scripts/build.ps1 -Test -Publish -Installer
       - uses: actions/upload-artifact@v4
         if: success()
         with:

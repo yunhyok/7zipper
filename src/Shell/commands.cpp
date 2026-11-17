@@ -48,6 +48,17 @@ bool IsArchivePath(const wchar_t* path) noexcept {
     return !*end && end - ext >= 4;
 }
 
+DWORD PhysicalFileAttributes(std::wstring_view path) noexcept {
+    if (path.size() < MAX_PATH || path.starts_with(L"\\\\?\\") || path.starts_with(L"\\\\.\\"))
+        return GetFileAttributesW(path.data());
+    try {
+        const bool unc = path.starts_with(L"\\\\");
+        std::wstring extended = unc ? L"\\\\?\\UNC\\" : L"\\\\?\\";
+        extended += unc ? path.substr(2) : path;
+        return GetFileAttributesW(extended.c_str());
+    } catch (const std::bad_alloc&) { return INVALID_FILE_ATTRIBUTES; }
+}
+
 HRESULT AppendPath(std::string& request, std::wstring_view path) {
     if (path.empty() || path.size() >= 32768) return E_INVALIDARG;
     const int length = static_cast<int>(path.size());
@@ -210,8 +221,9 @@ public:
                 if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &rawPath))) return S_OK;
                 TaskString path(rawPath);
                 if (!IsArchivePath(path.get())) return S_OK;
-                SFGAOF attrs;
-                if (FAILED(item->GetAttributes(SFGAO_FOLDER, &attrs)) || (attrs & SFGAO_FOLDER)) return S_OK;
+                // Explorer can expose an archive file as a browsable shell folder.
+                const DWORD attrs = PhysicalFileAttributes(path.get());
+                if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY)) return S_OK;
             }
         }
         *result = ECS_ENABLED;

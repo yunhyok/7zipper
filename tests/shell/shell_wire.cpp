@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -108,6 +109,26 @@ int wmain(int argc, wchar_t** argv) {
         for (const auto pidl : pidls) CoTaskMemFree(const_cast<ITEMIDLIST*>(pidl));
         EXPCMDSTATE state;
         assert(SUCCEEDED(actions[3]->GetState(items.get(), FALSE, &state)) && state == ECS_ENABLED);
+
+        const auto archive = job / L"Explorer archive.zip";
+        constexpr char emptyZip[22] = {'P', 'K', '\x05', '\x06'};
+        assert(std::ofstream(archive, std::ios::binary).write(emptyZip, sizeof(emptyZip)));
+        const auto folder = job / L"Ordinary folder.7z";
+        assert(fs::create_directory(folder));
+        const std::pair<fs::path, EXPCMDSTATE> checks[] = {{archive, ECS_ENABLED}, {folder, ECS_HIDDEN}};
+        for (const auto& [path, expected] : checks) {
+            PIDLIST_ABSOLUTE pidl = nullptr;
+            assert(SUCCEEDED(SHParseDisplayName(path.c_str(), nullptr, &pidl, 0, nullptr)));
+            PCIDLIST_ABSOLUTE selection[] = {pidl};
+            IShellItemArray* rawSelection = nullptr;
+            assert(SUCCEEDED(SHCreateShellItemArrayFromIDLists(1, selection, &rawSelection)));
+            CoTaskMemFree(pidl);
+            ComPtr<IShellItemArray> singleItem(rawSelection);
+            for (auto action : {3, 4})
+                assert(SUCCEEDED(actions[action]->GetState(singleItem.get(), FALSE, &state)) && state == expected);
+        }
+        assert(fs::remove(archive) && fs::remove(folder));
+
         assert(SUCCEEDED(actions[0]->Invoke(items.get(), nullptr)));
         for (int retry = 0; retry < 500 && !fs::exists(capture); ++retry) Sleep(10);
         assert(fs::exists(capture));
