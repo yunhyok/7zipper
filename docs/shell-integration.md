@@ -43,7 +43,7 @@ ctest --test-dir artifacts/shell-build --output-on-failure
 ISCC.exe installer/7Zipper.iss
 ```
 
-- 결과: `dist\7Zipper-Setup-0.1.0-x64.exe`.
+- 결과: `dist\7Zipper-Setup-0.1.1-x64.exe`.
 - 기본 경로: `{autopf}\7Zipper` (보통 `C:\Program Files\7Zipper`). 설치 경로 화면에서 폴더와 드라이브 선택 가능. 업데이트는 기존 설치 경로를 기본 표시.
 - Explorer 메뉴 추가 여부를 선택할 수 있음. 연결 프로그램 옵션은 기본 해제. 선택해도 Windows 기본 앱은 변경하지 않음.
 - 설치 관리 시험: `/CURRENTUSER`로 관리자 권한 없이 설치하면 등록 위치가 HKCU로 바뀜. 일반 실행의 기본은 관리자 권한이 필요한 모든 사용자 설치.
@@ -58,7 +58,7 @@ ISCC.exe installer/7Zipper.iss
 | 자동: `drag_lifetime` | Unicode·빈 폴더의 드롭 데이터, 비동기 복사 완료, 데이터 참조 유지, 취소 정리, 결과 불명 시 보존. |
 | Windows 클래식 메뉴 API | 임시 사용자 등록으로 .7z에 5개 항목 활성화, 폴더에 압축 3개 항목 표시 확인. 검사 후 임시 등록 제거. |
 | 빌드 | MSVC x64 Release DLL과 Inno Setup 7.1.1 설치 스크립트 컴파일. |
-| 실제 배포본: 사용자 범위 | 공백을 포함한 사용자 지정 경로 설치, 메뉴와 연결 프로그램 옵션 변경 업데이트, 기본 앱 유지 및 제거 확인. `tests/shell/installer-smoke.ps1 -Installer dist/7Zipper-Setup-0.1.0-x64.exe` |
+| 실제 배포본: 사용자 범위 | 공백을 포함한 사용자 지정 경로 설치, 메뉴와 연결 프로그램 옵션 변경 업데이트, 기본 앱 유지 및 제거 확인. `tests/shell/installer-smoke.ps1 -Installer dist/7Zipper-Setup-0.1.1-x64.exe` |
 | 실기: 관리자 권한 필요 | 프로그램 파일 기본 경로, 다른 드라이브 설치 및 모든 사용자 등록·제거. |
 | 실기: 일반 사용자 | 압축 파일 안에서 Explorer로 실제 드롭, 대용량 복사 중 창 닫기, Esc와 대상 거절 시 정리. |
 

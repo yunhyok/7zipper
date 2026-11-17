@@ -47,7 +47,7 @@ if ($Publish -or $Installer) {
         foreach ($notice in $notices) { Copy-Item -LiteralPath $notice.FullName -Destination (Join-Path $licenses ($framework.name + '-' + $notice.Name)) }
     }
     New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
-    $portable = Join-Path $projectRoot 'dist/7Zipper-0.1.0-win-x64-portable.zip'
+    $portable = Join-Path $projectRoot 'dist/7Zipper-0.1.1-win-x64-portable.zip'
     Compress-Archive -Path "$publishDirectory\*" -DestinationPath $portable -Force
     if ($Installer) {
         $isccPath = Join-Path $projectRoot '.tools\inno\ISCC.exe'
