@@ -13,7 +13,7 @@ Windows용 7z·ZIP 압축 프로그램. 공식 LZMA SDK와 Zstandard 기반 네�
 - 설치 기본 경로: `C:\Program Files\7Zipper`. 설치 화면에서 드라이브·폴더 변경 가능.
 - .NET 런타임 별도 설치 불필요.
 - 탐색기 메뉴는 설치판에서 선택 가능. Windows 11에서는 **더 많은 옵션 표시**에서 사용.
-- 첫 릴리스는 코드 서명 미적용. Windows의 확인 화면이 표시될 수 있음.
+- 현재 배포본은 코드 서명 미적용. Windows의 확인 화면이 표시될 수 있음.
 
 ## 02 / 주요 기능
 
@@ -31,6 +31,8 @@ Windows용 7z·ZIP 압축 프로그램. 공식 LZMA SDK와 Zstandard 기반 네�
 ZIP Zstandard는 압축 방식 93을 지원하는 프로그램 필요. UTF-8 표시가 없는 ZIP 파일명은 Unix·macOS 작성본이면 UTF-8, 그 외는 Windows OEM 코드페이지(한국어 Windows는 CP949)로 해석. 7z 읽기는 공식 LZMA SDK에 포함된 LZMA/LZMA2/PPMd/Copy 및 필터에 한정. Deflate64 ZIP, SDK에 없는 7z 코덱, RAR·EGG·ALZ는 미지원.
 
 분할 파일은 같은 폴더에 모두 보관할 것. 7z는 첫 `.001`, ZIP은 마지막 `.zip`으로 열기. 다른 조각을 선택해도 시작 파일 자동 검색.
+
+구형 ZIP 파일명은 UTF-8 표시·유니코드 확장 정보를 우선 사용. 표시가 없는 Unix·macOS 작성본은 유효한 UTF-8, 그 외는 Windows OEM 코드페이지 사용. OEM에서 유효하지 않은 바이트는 CP437로 복원. 두 코드페이지에서 모두 유효한 이름은 OEM 우선.
 
 ## 03 / 성능과 데이터 보호
 
