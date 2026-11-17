@@ -18,10 +18,10 @@ Invoke-Checked 'cmake' @('-S','src/Native','-B','build/native','-G','Ninja','-DC
 Invoke-Checked 'cmake' @('--build','build/native','--parallel', [Math]::Min(8,[Environment]::ProcessorCount).ToString())
 Invoke-Checked 'cmake' @('-S','src/Shell','-B','build/shell','-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DBUILD_TESTING=ON')
 Invoke-Checked 'cmake' @('--build','build/shell','--parallel', [Math]::Min(8,[Environment]::ProcessorCount).ToString())
-Invoke-Checked $dotnet @('build','src/App/SevenZipper.App.csproj','-c','Release','--nologo')
+Invoke-Checked $dotnet @('build','src/App/SevenZipper.App.csproj','-c','Release','-p:Platform=AnyCPU','--nologo')
 Copy-Item -LiteralPath 'build/native/SevenZipper.Native.dll','build/shell/SevenZipper.Shell.dll' -Destination 'src/App/bin/Release/net10.0-windows' -Force
 if ($Test) {
-    Invoke-Checked $dotnet @('run','--project','tests/SevenZipper.Tests','-c','Release')
+    Invoke-Checked $dotnet @('run','--project','tests/SevenZipper.Tests','-c','Release','--property:Platform=AnyCPU')
     Invoke-Checked 'ctest' @('--test-dir','build/shell','--output-on-failure')
     if (Test-Path -LiteralPath 'tests/native/smoke.py') { Invoke-Checked 'python' @('tests/native/smoke.py','build/native/SevenZipper.Native.dll') }
 }
@@ -33,7 +33,7 @@ if ($Publish -or $Installer) {
         if ($resolved -ne (Join-Path $projectRoot 'artifacts\publish')) { throw 'Unexpected publish path.' }
         Remove-Item -LiteralPath $resolved -Recurse -Force
     }
-    Invoke-Checked $dotnet @('publish','src/App/SevenZipper.App.csproj','-c','Release','-r','win-x64','--self-contained','true','-p:PublishSingleFile=false','-o',$publishDirectory,'--nologo')
+    Invoke-Checked $dotnet @('publish','src/App/SevenZipper.App.csproj','-c','Release','-r','win-x64','--self-contained','true','-p:Platform=AnyCPU','-p:PublishSingleFile=false','-o',$publishDirectory,'--nologo')
     Copy-Item -LiteralPath 'build/native/SevenZipper.Native.dll','build/shell/SevenZipper.Shell.dll','LICENSE','README.md','THIRD-PARTY-NOTICES.md' -Destination $publishDirectory
     Copy-Item -LiteralPath 'assets/7zipper.ico' -Destination $publishDirectory
     $nugetDirectory = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE '.nuget/packages' }
