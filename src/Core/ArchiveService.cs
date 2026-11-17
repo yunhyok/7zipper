@@ -91,6 +91,15 @@ public sealed partial class ArchiveService
         string parent = Path.GetDirectoryName(output)!, stem = Path.GetFileNameWithoutExtension(output), ext = Path.GetExtension(output);
         for (int n = 2; ; n++) { var candidate = Path.Combine(parent, $"{stem} ({n}){ext}"); if (!reserved.Contains(candidate) && !File.Exists(candidate)) return candidate; }
     }
+    // Reserve the entire volume basename before publishing; never overwrite an older archive or split set.
+    private static string UniqueOutput(string desired)
+    {
+        string parent = Path.GetDirectoryName(desired)!, stem = Path.GetFileNameWithoutExtension(desired), extension = Path.GetExtension(desired);
+        for (int n = 2; File.Exists(desired) || Directory.Exists(desired) || File.Exists(desired + ".001")
+            || File.Exists(Path.ChangeExtension(desired, ".z01")); n++)
+            desired = Path.Combine(parent, $"{stem} ({n}){extension}");
+        return desired;
+    }
     private static string Extension(ArchiveFormat format) => format == ArchiveFormat.SevenZip ? ".7z" : ".zip";
     private static CompressionOptions CopyOptions(CompressionOptions x, string output) => new() { Format = x.Format, Level = x.Level,
         Threads = x.Threads, MemoryLimitBytes = x.MemoryLimitBytes, VolumeBytes = x.VolumeBytes, Password = x.Password,
@@ -153,10 +162,7 @@ public sealed partial class ArchiveService
         if (!desired.EndsWith(Extension(options.Format), StringComparison.OrdinalIgnoreCase)) desired += Extension(options.Format);
         if (roots.Any(x => string.Equals(x, desired, StringComparison.OrdinalIgnoreCase))) throw new ArchiveException("원본 파일을 압축 출력으로 지정할 수 없습니다.");
         PathSafety.RejectReparseAncestors(desired);
-        desired = PathSafety.UniquePath(desired);
-        // Reserve the entire volume basename before publishing; never overwrite an older split set.
-        while (File.Exists(desired + ".001") || File.Exists(Path.ChangeExtension(desired, ".z01")))
-            desired = Path.Combine(Path.GetDirectoryName(desired)!, Path.GetFileNameWithoutExtension(desired) + " (2)" + Path.GetExtension(desired));
+        desired = UniqueOutput(desired);
         progress?.Report(new("파일 확인", 0, 0, roots[0]));
         var items = await Task.Run(() => EnumerateInputs(roots, desired, cancellation), cancellation).ConfigureAwait(false);
         var snapshots = await Task.Run(() => items.Where(x => !x.IsDirectory).ToDictionary(x => x.Source,
@@ -260,7 +266,8 @@ public sealed partial class ArchiveService
         {
             await WorkerHost.ExecuteAsync(new() { Operation = "extract", Archive = path, Destination = stage, Password = options.Password,
                 Indices = options.SelectedIndices == null ? null : selected.Select(x => x.Index).ToArray(), Threads = threads, MemoryLimitBytes = memory }, progress, cancellation);
-            var files = await CommitAsync(stage, target, options.Collision, path, protectedSources, newFolder, cancellation);
+            // Moving the staged tree is blocking file I/O; keep it off the caller's UI thread.
+            var files = await Task.Run(() => CommitAsync(stage, target, options.Collision, path, protectedSources, newFolder, cancellation), cancellation);
             progress?.Report(new("완료", 1, 1, target));
             return files;
         }
@@ -312,6 +319,7 @@ public sealed partial class ArchiveService
             PathSafety.RejectReparseAncestors(destination);
             Directory.CreateDirectory(destination);
             var outputs = new List<string>();
+            var zone = PathSafety.SupportsNamedStreams(stage) ? ReadZone(archive) : null;
             await MoveDirectoryAsync(stage, destination);
             return outputs;
 
@@ -337,7 +345,7 @@ public sealed partial class ArchiveService
                         {
                             PathSafety.RejectReparseAncestors(target);
                             if (protectedSources.Contains(PathSafety.ResolveExistingFile(target))) throw new ArchiveException("원본 압축파일 또는 분할 볼륨을 덮어쓸 수 없습니다.");
-                            PropagateZone(archive, source);
+                            if (zone != null) WriteZone(source, zone);
                             File.Move(source, target, true);
                             outputs.Add(target);
                             continue;
@@ -349,7 +357,7 @@ public sealed partial class ArchiveService
                         await MoveDirectoryAsync(source, target);
                         outputs.Add(target);
                     }
-                    else { PropagateZone(archive, source); File.Move(source, target, false); outputs.Add(target); }
+                    else { if (zone != null) WriteZone(source, zone); File.Move(source, target, false); outputs.Add(target); }
                 }
             }
         }
@@ -380,16 +388,20 @@ public sealed partial class ArchiveService
         return result;
     }
 
-    private static void PropagateZone(string archive, string output)
+    private static string? ReadZone(string archive)
     {
+        if (!PathSafety.SupportsNamedStreams(archive)) return null;
         string zone;
         try { zone = File.ReadAllText(archive + ":Zone.Identifier"); }
-        catch (FileNotFoundException) { return; }
-        catch (DirectoryNotFoundException) { return; }
+        catch (FileNotFoundException) { return null; }
+        catch (DirectoryNotFoundException) { return null; }
         // Only the zone number is propagated; untrusted ADS text is never copied verbatim.
         var match = Regex.Match(zone, @"(?m)^ZoneId=([0-4])\s*$");
-        if (match.Success) File.WriteAllText(output + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=" + match.Groups[1].Value + "\r\n");
+        return match.Success ? match.Groups[1].Value : null;
     }
+
+    private static void WriteZone(string output, string zone)
+        => File.WriteAllText(output + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=" + zone + "\r\n");
 
     public async Task TestAsync(string path, string? password = null, IProgress<ArchiveProgress>? progress = null, CancellationToken cancellation = default)
     {
@@ -415,7 +427,8 @@ public sealed partial class ArchiveService
             // shortcut: orphaned drag data survives a crash; reclaim only after a reboot or explicit user cleanup.
             await WorkerHost.ExecuteAsync(new() { Operation = "extract", Archive = path, Destination = directory, Password = password,
                 Indices = entries.Select(x => x.Index).ToArray(), Threads = Environment.ProcessorCount, MemoryLimitBytes = memory }, progress, cancellation);
-            foreach (var entry in entries.Where(x => !x.IsDirectory)) PropagateZone(path, PathSafety.SafeCombine(directory, entry.Path));
+            if ((PathSafety.SupportsNamedStreams(directory) ? ReadZone(path) : null) is { } zone)
+                await Task.Run(() => { foreach (var entry in entries.Where(x => !x.IsDirectory)) WriteZone(PathSafety.SafeCombine(directory, entry.Path), zone); }, cancellation);
             var selectedRoots = entries.Where(x => selected.Contains(x.Index)).Select(x => PathSafety.ValidateEntryName(x.Path))
                 .OrderBy(x => x.Length).ToList();
             var paths = new List<string>();
