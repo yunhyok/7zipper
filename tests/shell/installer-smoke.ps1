@@ -1,7 +1,10 @@
-param([Parameter(Mandatory)][string]$Installer)
+param([Parameter(Mandatory)][string]$Installer, [switch]$DisposableEnvironment)
 
 $ErrorActionPreference = 'Stop'
 if (-not [Environment]::Is64BitProcess) { throw 'Run the installer smoke test in 64-bit PowerShell.' }
+if (-not $DisposableEnvironment) {
+    throw 'Run this install/uninstall test only in a disposable Windows VM with -DisposableEnvironment. Open Explorer processes can retain a DLL from the temporary installation after uninstall.'
+}
 $setup = (Resolve-Path -LiteralPath $Installer).Path
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
 $scratch = Join-Path $root "artifacts\installer-check-$([Guid]::NewGuid().ToString('N'))"
@@ -12,6 +15,7 @@ $clsid = '{9DF247FA-3897-4193-8F57-58062056862D}'
 $registration = "$classes\CLSID\$clsid"
 $progId = '7Zipper.Archive'
 $uninstallEntry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{8E2C4C73-1712-46F1-956D-B919014935AD}_is1'
+$machineInstall = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{8E2C4C73-1712-46F1-956D-B919014935AD}_is1'
 $extensions = '.7z', '.zip'
 $defaults = @{}
 $logIndex = 0
@@ -28,6 +32,7 @@ function Test-Integration($Expected) {
     }
     if ($Expected -and ((Read-RegistryValue "$registration\InprocServer32" '') -ne (Join-Path $directory 'SevenZipper.Shell.dll') -or
                        (Read-RegistryValue $verb 'ExplorerCommandHandler') -ne $clsid -or
+                       (Read-RegistryValue $verb 'Icon') -ne ('"' + (Join-Path $directory '7Zipper.exe') + '",0') -or
                        (Read-RegistryValue $verb 'MultiSelectModel') -ne 'Player' -or
                        (Read-RegistryValue "$classes\$progId\shell\open\command" '') -ne
                            ('"' + (Join-Path $directory '7Zipper.exe') + '" "%1"'))) {
@@ -50,7 +55,9 @@ function Invoke-InstallerProcess($Executable, [string[]]$Arguments) {
     Remove-Item -LiteralPath $log
 }
 
-if (Test-Path -LiteralPath $uninstallEntry) { throw 'Existing per-user 7Zipper installation; skipped smoke test.' }
+if ((Test-Path -LiteralPath $uninstallEntry) -or (Test-Path -LiteralPath $machineInstall)) {
+    throw 'Existing 7Zipper installation; use a clean disposable Windows VM for this test.'
+}
 foreach ($extension in $extensions) { $defaults[$extension] = Read-RegistryValue "$classes\$extension" '' }
 Test-Integration $false
 $silent = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'

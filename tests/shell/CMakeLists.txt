@@ -1,4 +1,4 @@
-foreach(test drag_lifetime shell_wire)
+foreach(test drag_lifetime shell_wire shell_installed)
     add_executable(${test} ${test}.cpp)
     target_include_directories(${test} PRIVATE "${PROJECT_SOURCE_DIR}")
     target_compile_features(${test} PRIVATE cxx_std_20)
@@ -6,6 +6,7 @@ foreach(test drag_lifetime shell_wire)
     target_compile_options(${test} PRIVATE /W4 /utf-8 /permissive-)
     target_link_libraries(${test} PRIVATE ntdll ole32 shell32 shlwapi user32 uuid)
 endforeach()
+target_link_libraries(shell_installed PRIVATE gdi32)
 
 add_test(NAME drag_lifetime COMMAND drag_lifetime)
 add_test(NAME shell_wire COMMAND shell_wire "$<TARGET_FILE:SevenZipper.Shell>")

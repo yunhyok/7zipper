@@ -89,6 +89,32 @@ Check(File.Exists(Path.Combine(Path.GetDirectoryName(preserved)!, "한글 (2).tx
 var perFolder = Path.Combine(root, "per-folder");
 var folders = await service.CreateAsync([source, Path.Combine(source, "nested")], new() { PerFolder = true, OutputPath = perFolder, Format = ArchiveFormat.Zip, Threads = 4 });
 Check(folders.Count == 2, "each selected folder gets an archive");
+var firstFolder = Path.Combine(root, "A");
+var secondFolder = Path.Combine(root, "A (2)");
+Directory.CreateDirectory(firstFolder);
+Directory.CreateDirectory(secondFolder);
+await File.WriteAllTextAsync(Path.Combine(firstFolder, "content.txt"), "first folder");
+await File.WriteAllTextAsync(Path.Combine(secondFolder, "content.txt"), "second folder");
+foreach (var (format, extension, volume) in new[]
+    { (ArchiveFormat.SevenZip, ".7z", "A.7z.001"), (ArchiveFormat.Zip, ".zip", "A.z01") })
+{
+    var output = Path.Combine(root, "per-folder-" + format);
+    Directory.CreateDirectory(output);
+    var existingVolume = Path.Combine(output, volume);
+    await File.WriteAllTextAsync(existingVolume, "existing volume");
+    var results = await service.CreateAsync([firstFolder, secondFolder], new() { PerFolder = true, OutputPath = output,
+        Format = format, Threads = 2, MemoryLimitBytes = 512UL * 1024 * 1024 });
+    var firstArchive = Path.Combine(output, "A (2)" + extension);
+    var secondArchive = Path.Combine(output, "A (2) (2)" + extension);
+    Check(results.Count == 2 && results.Contains(firstArchive) && results.Contains(secondArchive), format + " per-folder split name collision resolved");
+    var firstExtracted = Path.Combine(output, "first");
+    var secondExtracted = Path.Combine(output, "second");
+    await service.ExtractAsync(firstArchive, new() { DestinationDirectory = firstExtracted, Mode = ExtractionMode.Here });
+    await service.ExtractAsync(secondArchive, new() { DestinationDirectory = secondExtracted, Mode = ExtractionMode.Here });
+    Check(await File.ReadAllTextAsync(Path.Combine(firstExtracted, "A", "content.txt")) == "first folder", format + " first archive contents");
+    Check(await File.ReadAllTextAsync(Path.Combine(secondExtracted, "A (2)", "content.txt")) == "second folder", format + " second archive contents");
+    Check(await File.ReadAllTextAsync(existingVolume) == "existing volume", format + " existing per-folder split volume preserved");
+}
 var encryptedA = Path.Combine(root, "SevenZip-True-True-False.7z");
 var encryptedB = Path.Combine(root, "Zip-True-False-False.zip");
 int prompts = 0;

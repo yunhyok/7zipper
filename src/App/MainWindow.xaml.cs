@@ -46,6 +46,8 @@ public partial class MainWindow : Window
         UpdateControls();
     }
 
+    internal bool IsClosing => _closeRequested;
+
     public void HandleRequest(ShellRequest request)
     {
         if (!Dispatcher.CheckAccess())

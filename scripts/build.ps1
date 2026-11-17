@@ -22,6 +22,7 @@ Invoke-Checked $dotnet @('build','src/App/SevenZipper.App.csproj','-c','Release'
 Copy-Item -LiteralPath 'build/native/SevenZipper.Native.dll','build/shell/SevenZipper.Shell.dll' -Destination 'src/App/bin/Release/net10.0-windows' -Force
 if ($Test) {
     Invoke-Checked $dotnet @('run','--project','tests/SevenZipper.Tests','-c','Release','--property:Platform=AnyCPU')
+    Invoke-Checked $dotnet @('run','--project','tests/SevenZipper.AppTests','-c','Release','--property:Platform=AnyCPU')
     Invoke-Checked 'ctest' @('--test-dir','build/shell','--output-on-failure')
     if (Test-Path -LiteralPath 'tests/native/smoke.py') { Invoke-Checked 'python' @('tests/native/smoke.py','build/native/SevenZipper.Native.dll') }
 }
@@ -47,7 +48,7 @@ if ($Publish -or $Installer) {
         foreach ($notice in $notices) { Copy-Item -LiteralPath $notice.FullName -Destination (Join-Path $licenses ($framework.name + '-' + $notice.Name)) }
     }
     New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
-    $portable = Join-Path $projectRoot 'dist/7Zipper-0.1.2-win-x64-portable.zip'
+    $portable = Join-Path $projectRoot 'dist/7Zipper-0.1.3-win-x64-portable.zip'
     Compress-Archive -Path "$publishDirectory\*" -DestinationPath $portable -Force
     if ($Installer) {
         $isccPath = Join-Path $projectRoot '.tools\inno\ISCC.exe'

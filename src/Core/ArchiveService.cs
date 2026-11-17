@@ -63,22 +63,23 @@ public sealed partial class ArchiveService
             if (paths.Any(path => outputDirectory.Equals(path, StringComparison.OrdinalIgnoreCase)
                 || outputDirectory.StartsWith(path + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
                 throw new ArchiveException("폴더별 압축의 출력 위치는 원본 폴더 바깥으로 지정하세요.");
-            PathSafety.RejectReparseAncestors(options.OutputPath);
-            Directory.CreateDirectory(options.OutputPath);
+            PathSafety.RejectReparseAncestors(outputDirectory);
+            Directory.CreateDirectory(outputDirectory);
             var outputs = new ConcurrentBag<string>();
             int parallel = Math.Min(paths.Count, Math.Min(4, Math.Min(threads, (int)Math.Min(int.MaxValue, memory / (256UL * 1024 * 1024)))));
             parallel = Math.Max(1, parallel);
             var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var jobs = paths.Select(path =>
             {
-                var output = PathSafety.UniquePath(Path.Combine(options.OutputPath, Path.GetFileName(path) + Extension(options.Format)));
-                while (!reserved.Add(output)) output = NextReserved(output, reserved);
+                var output = UniqueOutput(Path.Combine(outputDirectory, Path.GetFileName(path) + Extension(options.Format)), reserved);
+                reserved.Add(output);
                 return (path, output);
             }).ToArray();
             await Parallel.ForEachAsync(jobs, new ParallelOptions { MaxDegreeOfParallelism = parallel, CancellationToken = cancellation }, async (item, token) =>
             {
                 var local = CopyOptions(options, item.output);
-                var completed = await CreateOneAsync([item.path], local, memory / (ulong)parallel, Math.Max(1, threads / parallel), progress, token);
+                var completed = await CreateOneAsync([item.path], local, memory / (ulong)parallel, Math.Max(1, threads / parallel),
+                    progress, token, outputReserved: true);
                 foreach (var output in completed) outputs.Add(output);
             });
             return outputs.Order(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -86,20 +87,16 @@ public sealed partial class ArchiveService
         finally { Queue.Release(); }
     }
 
-    private static string NextReserved(string output, HashSet<string> reserved)
-    {
-        string parent = Path.GetDirectoryName(output)!, stem = Path.GetFileNameWithoutExtension(output), ext = Path.GetExtension(output);
-        for (int n = 2; ; n++) { var candidate = Path.Combine(parent, $"{stem} ({n}){ext}"); if (!reserved.Contains(candidate) && !File.Exists(candidate)) return candidate; }
-    }
     // Reserve the entire volume basename before publishing; never overwrite an older archive or split set.
-    private static string UniqueOutput(string desired)
+    private static string UniqueOutput(string desired, HashSet<string>? reserved = null)
     {
         string parent = Path.GetDirectoryName(desired)!, stem = Path.GetFileNameWithoutExtension(desired), extension = Path.GetExtension(desired);
-        for (int n = 2; File.Exists(desired) || Directory.Exists(desired) || File.Exists(desired + ".001")
-            || File.Exists(Path.ChangeExtension(desired, ".z01")); n++)
+        for (int n = 2; reserved?.Contains(desired) == true || OutputExists(desired); n++)
             desired = Path.Combine(parent, $"{stem} ({n}){extension}");
         return desired;
     }
+    private static bool OutputExists(string path) => File.Exists(path) || Directory.Exists(path)
+        || File.Exists(path + ".001") || File.Exists(Path.ChangeExtension(path, ".z01"));
     private static string Extension(ArchiveFormat format) => format == ArchiveFormat.SevenZip ? ".7z" : ".zip";
     private static CompressionOptions CopyOptions(CompressionOptions x, string output) => new() { Format = x.Format, Level = x.Level,
         Threads = x.Threads, MemoryLimitBytes = x.MemoryLimitBytes, VolumeBytes = x.VolumeBytes, Password = x.Password,
@@ -156,13 +153,14 @@ public sealed partial class ArchiveService
     }
 
     private async Task<IReadOnlyList<string>> CreateOneAsync(IReadOnlyList<string> roots, CompressionOptions options,
-        ulong memory, int threads, IProgress<ArchiveProgress>? progress, CancellationToken cancellation)
+        ulong memory, int threads, IProgress<ArchiveProgress>? progress, CancellationToken cancellation, bool outputReserved = false)
     {
         string desired = Path.GetFullPath(options.OutputPath);
         if (!desired.EndsWith(Extension(options.Format), StringComparison.OrdinalIgnoreCase)) desired += Extension(options.Format);
         if (roots.Any(x => string.Equals(x, desired, StringComparison.OrdinalIgnoreCase))) throw new ArchiveException("원본 파일을 압축 출력으로 지정할 수 없습니다.");
         PathSafety.RejectReparseAncestors(desired);
-        desired = UniqueOutput(desired);
+        if (!outputReserved) desired = UniqueOutput(desired);
+        else if (OutputExists(desired)) throw new ArchiveException($"출력 경로에 압축 파일 또는 분할 볼륨이 이미 있습니다: {desired}");
         progress?.Report(new("파일 확인", 0, 0, roots[0]));
         var items = await Task.Run(() => EnumerateInputs(roots, desired, cancellation), cancellation).ConfigureAwait(false);
         var snapshots = await Task.Run(() => items.Where(x => !x.IsDirectory).ToDictionary(x => x.Source,

@@ -63,7 +63,7 @@ pwsh ./scripts/build.ps1 -Test -Publish -Installer
 dotnet run --project tests/SevenZipper.Tests -c Release -- --managed
 ```
 
-최신 파일명·드래그 검사는 [v0.1.2 검증 기록](docs/validation-v0.1.2.md), 네이티브 엔진·UI·성능 실측 결과는 [초기 검증 기록](docs/validation.md) 참조.
+최신 메뉴·배포 앱 검사는 [v0.1.3 검증 기록](docs/validation-v0.1.3.md), 파일명·드래그 검사는 [v0.1.2 검증 기록](docs/validation-v0.1.2.md), 네이티브 엔진·UI·성능 실측 결과는 [초기 검증 기록](docs/validation.md) 참조.
 
 ## 05 / 구성 및 라이선스
 
