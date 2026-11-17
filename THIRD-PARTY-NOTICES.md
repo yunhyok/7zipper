@@ -97,4 +97,3 @@ Copyright notice:
 ## .NET runtime
 
 The self-contained binary distribution includes Microsoft .NET and Windows Desktop runtime files. Their upstream LICENSE and THIRD-PARTY-NOTICES files accompany the published runtime under licenses/. Source: https://github.com/dotnet/runtime and https://github.com/dotnet/wpf
-

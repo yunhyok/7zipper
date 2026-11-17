@@ -186,4 +186,3 @@ add_library(SevenZipper.Native SHARED engine.cpp seven.cpp zip.cpp ${sdk_sources
 target_compile_definitions(SevenZipper.Native PRIVATE SEVENZIPPER_EXPORTS)
 target_include_directories(SevenZipper.Native PRIVATE "${LZMA}/CPP")
 target_link_libraries(SevenZipper.Native PRIVATE minizip ZLIB::ZLIBSTATIC libzstd_static ole32 oleaut32 advapi32)
-

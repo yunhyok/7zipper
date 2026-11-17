@@ -9,9 +9,9 @@
 - 탐색기 클래식 메뉴. Windows 11에서는 **더 많은 옵션 표시**에서 사용.
 - 기본 Program Files 설치, 설치 위치 변경, .NET 런타임 포함.
 
-**설치판:** `7Zipper-Setup-0.1.0-x64.exe`  
-**포터블:** `7Zipper-0.1.0-win-x64-portable.zip`  
-**무결성 확인:** `SHA256SUMS.txt`
+- **설치판:** `7Zipper-Setup-0.1.0-x64.exe`
+- **포터블:** `7Zipper-0.1.0-win-x64-portable.zip`
+- **무결성 확인:** `SHA256SUMS.txt`
 
 7z 분할은 `.7z.001`, ZIP 분할은 마지막 `.zip`으로 열 것. 모든 조각을 같은 폴더에 보관할 것. Zstandard ZIP은 압축 방식 93을 지원하는 프로그램 필요.
 
