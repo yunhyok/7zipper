@@ -262,6 +262,9 @@ public partial class MainWindow : Window
         _job = cancellation;
         JobProgress.Value = 0;
         JobProgress.IsIndeterminate = true;
+        OverallProgressText.Text = "전체 진행률 · 준비 중";
+        ProgressCountText.Text = "";
+        CurrentProgressPanel.Visibility = Visibility.Collapsed;
         SetStatus($"{title} 중");
         AddLog($"{title} 시작");
         UpdateControls();
@@ -270,8 +273,20 @@ public partial class MainWindow : Window
         var progress = new Progress<ArchiveProgress>(report =>
         {
             if (_job != cancellation || cancellation.IsCancellationRequested) return;
-            JobProgress.IsIndeterminate = report.TotalBytes == 0;
-            if (report.TotalBytes > 0) JobProgress.Value = Math.Clamp(100d * report.CompletedBytes / report.TotalBytes, 0, 100);
+            double? currentPercent = report.TotalBytes > 0
+                ? Math.Clamp(100d * report.CompletedBytes / report.TotalBytes, 0, 100) : null;
+            var overallPercent = report.OverallPercent ?? currentPercent;
+            JobProgress.IsIndeterminate = overallPercent == null;
+            if (overallPercent is { } value) JobProgress.Value = Math.Clamp(value, 0, 100);
+            OverallProgressText.Text = overallPercent == null ? "전체 진행률 · 준비 중"
+                : $"전체 진행률 · {Math.Floor(JobProgress.Value):0}%";
+            bool batch = report.TotalJobs > 1;
+            ProgressCountText.Text = batch ? $"압축 파일 수 기준 · {report.CompletedJobs}/{report.TotalJobs}개 완료" : "";
+            CurrentProgressPanel.Visibility = batch ? Visibility.Visible : Visibility.Collapsed;
+            CurrentJobProgress.IsIndeterminate = currentPercent == null;
+            CurrentJobProgress.Value = currentPercent ?? 0;
+            CurrentProgressText.Text = currentPercent == null ? "현재 압축 파일 · 준비 중"
+                : $"현재 압축 파일 · {Math.Floor(currentPercent.Value):0}%";
             var stage = report.Stage.ToLowerInvariant() switch
             {
                 "create" or "compress" => "압축",
@@ -280,17 +295,18 @@ public partial class MainWindow : Window
                 "list" or "open" => "파일 읽기",
                 _ => report.Stage
             };
-            var percentage = report.TotalBytes > 0 ? $" · {JobProgress.Value:0}%" : "";
-            if (report.JobId != null) completedByJob[report.JobId] = report.CompletedBytes;
+            if (report.JobId != null)
+                completedByJob[report.JobId] = Math.Max(completedByJob.GetValueOrDefault(report.JobId), report.CompletedBytes);
             var rate = elapsed.Elapsed.TotalSeconds > 0.2 && completedByJob.Count > 0
                 ? $" · {completedByJob.Values.Sum(value => (double)value) / elapsed.Elapsed.TotalSeconds / 1048576:0.0} MiB/s" : "";
-            SetStatus($"{title} 중{percentage}{rate}", string.IsNullOrWhiteSpace(report.CurrentFile)
+            SetStatus($"{title} 중{rate}", string.IsNullOrWhiteSpace(report.CurrentFile)
                 ? stage : $"{stage} · {report.CurrentFile}");
         });
         try
         {
             var detail = await work(progress, cancellation.Token);
             JobProgress.Value = 100;
+            OverallProgressText.Text = "전체 진행률 · 100%";
             SetStatus($"{title} 완료", detail);
             AddLog($"{title} 완료{(detail == null ? "" : $" · {detail}")}");
             return true;
@@ -298,12 +314,14 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
             JobProgress.Value = 0;
+            OverallProgressText.Text = "전체 진행률 · 취소됨";
             SetStatus($"{title} 취소됨");
             AddLog($"{title} 취소됨");
         }
         catch (Exception error)
         {
             JobProgress.Value = 0;
+            OverallProgressText.Text = "전체 진행률 · 실패";
             SetStatus($"{title} 실패", error.Message);
             AddLog($"{title} 실패 · {error.Message}");
             if (!_closeRequested) TaskDialog.ShowError(this, $"{title} 실패", error.Message);
@@ -312,6 +330,8 @@ public partial class MainWindow : Window
         {
             _job = null;
             JobProgress.IsIndeterminate = false;
+            CurrentProgressPanel.Visibility = Visibility.Collapsed;
+            CurrentJobProgress.IsIndeterminate = false;
             UpdateControls();
             ScheduleRequests();
         }

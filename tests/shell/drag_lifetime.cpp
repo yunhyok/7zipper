@@ -12,11 +12,12 @@ fs::path NewStage() {
     assert(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &rawLocal)));
     TaskString local(rawLocal);
     GUID id;
-    wchar_t raw[40];
+    wchar_t raw[40]{};
     assert(SUCCEEDED(CoCreateGuid(&id)));
     assert(StringFromGUID2(id, raw, 40));
     std::wstring name;
     for (auto ch : raw) if (iswxdigit(ch)) name += ch;
+    assert(name.size() == 32);
     fs::path job = fs::path(local.get()) / L"7Zipper" / L"Drag" / name;
     assert(fs::create_directories(job));
     return job;

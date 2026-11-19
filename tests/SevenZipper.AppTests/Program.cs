@@ -29,6 +29,8 @@ internal static class Program
     {
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.InitializeComponent();
+        ProgressDisplayChecks.Run();
+        CompressionLayoutChecks.Run();
         var first = new MainWindow();
         var second = new MainWindow();
         var queued = new ShellRequest("compress-7z", [Path.GetFullPath("queued.txt")]);

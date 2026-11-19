@@ -6,7 +6,8 @@ public enum CollisionPolicy { Ask, Skip, Rename, Overwrite }
 
 public sealed record ArchiveEntry(uint Index, string Path, ulong Size, ulong PackedSize,
     bool IsDirectory, bool IsEncrypted, string Method, DateTimeOffset? Modified);
-public sealed record ArchiveProgress(string Stage, ulong CompletedBytes, ulong TotalBytes, string? CurrentFile, string? JobId = null);
+public sealed record ArchiveProgress(string Stage, ulong CompletedBytes, ulong TotalBytes, string? CurrentFile, string? JobId = null,
+    double? OverallPercent = null, int CompletedJobs = 0, int TotalJobs = 0);
 public sealed record ShellRequest(string Operation, string[] Paths);
 
 public sealed class CompressionOptions
