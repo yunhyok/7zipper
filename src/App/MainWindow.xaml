@@ -221,9 +221,19 @@
                                    ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
                     </StackPanel>
                 </DockPanel>
-                <ProgressBar x:Name="JobProgress" Height="6" Margin="0,7,0,1" Minimum="0" Maximum="100"
+                <DockPanel Margin="0,7,0,0">
+                    <TextBlock x:Name="ProgressCountText" DockPanel.Dock="Right" Style="{StaticResource Muted}" />
+                    <TextBlock x:Name="OverallProgressText" Text="전체 진행률" Style="{StaticResource Muted}" />
+                </DockPanel>
+                <ProgressBar x:Name="JobProgress" Height="6" Margin="0,4,0,1" Minimum="0" Maximum="100"
                              Background="{StaticResource InputBrush}" Foreground="{StaticResource FocusBrush}"
-                             AutomationProperties.Name="현재 작업 진행률" />
+                             AutomationProperties.Name="전체 진행률" />
+                <StackPanel x:Name="CurrentProgressPanel" Margin="0,5,0,0" Visibility="Collapsed">
+                    <TextBlock x:Name="CurrentProgressText" Style="{StaticResource Muted}" />
+                    <ProgressBar x:Name="CurrentJobProgress" Height="4" Margin="0,3,0,1" Minimum="0" Maximum="100"
+                                 Background="{StaticResource InputBrush}" Foreground="{StaticResource MutedBrush}"
+                                 AutomationProperties.Name="현재 압축 파일 진행률" />
+                </StackPanel>
                 <ListBox x:Name="LogList" MaxHeight="92" Margin="0,5,0,0"
                          Visibility="{Binding IsChecked, ElementName=LogToggle, Converter={StaticResource BooleanToVisibility}}"
                          Background="{StaticResource EditorBrush}" BorderBrush="{StaticResource LineBrush}"

@@ -13,7 +13,7 @@
             </StackPanel>
         </StackPanel>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="0,0,7,0">
+            <StackPanel Margin="0,0,7,24">
                 <Border Style="{StaticResource AppPanel}" Padding="12" Margin="0,0,0,10">
                     <StackPanel>
                         <TextBlock Text="압축할 항목" Style="{StaticResource SectionTitle}" />
@@ -87,7 +87,7 @@
                     </StackPanel>
                 </Border>
 
-                <Expander Header="성능 설정" Margin="0,6,0,0">
+                <Expander Header="성능 설정" Margin="0,6,0,0" Expanded="OnPerformanceExpanded">
                     <Grid Margin="10,4,10,4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -99,7 +99,9 @@
                             <TextBox x:Name="ThreadsBox" Style="{StaticResource Field}" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
-                            <Label Content="메모리 한도 (MiB, 0 = 자동)" Target="{Binding ElementName=MemoryBox}" Style="{StaticResource DialogLabel}" />
+                            <Label Target="{Binding ElementName=MemoryBox}" Style="{StaticResource DialogLabel}">
+                                <TextBlock Text="메모리 한도 (MiB, 0 = 자동)" TextWrapping="Wrap" />
+                            </Label>
                             <TextBox x:Name="MemoryBox" Text="0" Style="{StaticResource Field}" />
                         </StackPanel>
                     </Grid>

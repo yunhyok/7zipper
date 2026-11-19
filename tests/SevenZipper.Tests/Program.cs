@@ -15,6 +15,39 @@ Check(!ArchiveService.NeedsFolder([Entry("photos/a.txt"), Entry("photos/b.txt")]
 Check(!ArchiveService.NeedsFolder([Entry("empty", true)]), "empty folder smart extract");
 Check(ArchiveService.NeedsFolder([Entry("a.txt"), Entry("b.txt")]), "multiple root files");
 Check(ArchiveService.NeedsFolder([Entry("dir/a.txt"), Entry("b.txt")]), "mixed roots");
+
+void CheckBatch(IReadOnlyList<ArchiveProgress> reports, int jobs, string label, bool completed = true)
+{
+    Check(reports.Count > 0 && reports.All(p => p.OverallPercent is >= 0 and <= 100 && p.TotalJobs == jobs), label + " known batch size");
+    Check(reports[0].OverallPercent == 0 && reports[0].CompletedJobs == 0, label + " starts at zero including queued jobs");
+    Check(reports.Zip(reports.Skip(1)).All(p => p.First.OverallPercent <= p.Second.OverallPercent
+        && p.First.CompletedJobs <= p.Second.CompletedJobs), label + " serialized monotonic progress");
+    Check(reports.All(p => p.CompletedJobs == jobs || p.OverallPercent < 100), label + " waits for every commit");
+    Check(completed ? reports[^1].OverallPercent == 100 && reports[^1].CompletedJobs == jobs
+        : reports[^1].OverallPercent < 100 && reports[^1].CompletedJobs < jobs, label + " completion state");
+    if (completed) Check(reports.Where(p => p.JobId != null).Select(p => p.JobId).Distinct().Count() == jobs, label + " stable logical job IDs");
+}
+
+var aggregateReports = new List<ArchiveProgress>();
+var aggregateType = typeof(ArchiveService).Assembly.GetType("SevenZipper.Core.BatchProgress")!;
+var aggregate = Activator.CreateInstance(aggregateType, 3, new ImmediateProgress(aggregateReports.Add))!;
+var aggregateJobs = Enumerable.Range(0, 3).Select(i => (IProgress<ArchiveProgress>)aggregateType.GetProperty("Item")!.GetValue(aggregate, [i])!).ToArray();
+void CompleteAggregate(int index) => aggregateJobs[index].GetType().GetMethod("Complete")!.Invoke(aggregateJobs[index], null);
+aggregateJobs[0].Report(new("압축", 100, 100, "first", "worker-a"));
+Check(aggregateReports[^1].OverallPercent is > 33 and < 34 && aggregateReports[^1].CompletedJobs == 0,
+    "one finished worker cannot fill a three-job batch before commit");
+var logicalId = aggregateReports[^1].JobId;
+aggregateJobs[0].Report(new("파일 확인", 0, 0, "first", "worker-retry"));
+Check(aggregateReports[^1].JobId == logicalId && aggregateReports[^1].CompletedBytes == 0 && aggregateReports[^1].TotalBytes == 0,
+    "retry keeps logical ID and raw byte counters");
+aggregateJobs[1].Report(new("압축", 0, 0, "empty"));
+Check(aggregateReports[^1].OverallPercent == aggregateReports[^2].OverallPercent, "unknown and empty totals do not invent progress");
+Parallel.For(0, 100, i => aggregateJobs[i % 3].Report(new("압축", (ulong)i, 100, "parallel")));
+CompleteAggregate(0);
+CompleteAggregate(1);
+Check(aggregateReports[^1].OverallPercent < 100 && aggregateReports[^1].CompletedJobs == 2, "empty job completes only when committed");
+CompleteAggregate(2);
+CheckBatch(aggregateReports, 3, "deterministic batch");
 if (args.Contains("--managed")) { Console.WriteLine($"PASS {assertions} managed assertions"); return 0; }
 
 var parent = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/test-work"));
@@ -89,6 +122,40 @@ Check(File.Exists(Path.Combine(Path.GetDirectoryName(preserved)!, "한글 (2).tx
 var perFolder = Path.Combine(root, "per-folder");
 var folders = await service.CreateAsync([source, Path.Combine(source, "nested")], new() { PerFolder = true, OutputPath = perFolder, Format = ArchiveFormat.Zip, Threads = 4 });
 Check(folders.Count == 2, "each selected folder gets an archive");
+var batchInputs = Enumerable.Range(0, 6).Select(i => Path.Combine(root, "progress-source", "folder-" + i)).ToArray();
+foreach (var folder in batchInputs) Directory.CreateDirectory(folder);
+await File.WriteAllBytesAsync(Path.Combine(batchInputs[1], "zero.bin"), []);
+await File.WriteAllBytesAsync(Path.Combine(batchInputs[2], "random.bin"), random);
+await File.WriteAllTextAsync(Path.Combine(batchInputs[3], "text.txt"), new string('a', 65536));
+Directory.CreateDirectory(Path.Combine(batchInputs[4], "nested-empty"));
+await File.WriteAllTextAsync(Path.Combine(batchInputs[5], "small.txt"), "small");
+foreach (var format in Enum.GetValues<ArchiveFormat>())
+{
+    Console.WriteLine("TEST batch-progress-" + format);
+    var output = Path.Combine(root, "progress-create-" + format);
+    var creationReports = new List<ArchiveProgress>();
+    bool committedBeforeComplete = true;
+    var archives = await service.CreateAsync(batchInputs, new() { PerFolder = true, OutputPath = output, Format = format,
+        Threads = 2, MemoryLimitBytes = 512UL * 1024 * 1024 }, new ImmediateProgress(p =>
+        {
+            creationReports.Add(p);
+            if (p.CompletedJobs > 0) committedBeforeComplete &= Directory.GetFiles(output).Length >= p.CompletedJobs;
+        }));
+    CheckBatch(creationReports, 6, format + " queued create");
+    Check(committedBeforeComplete && archives.Count == 6, format + " reports completed archives after publishing");
+    var emptyArchive = Path.Combine(output, "no-entries.zip");
+    using (ZipFile.Open(emptyArchive, ZipArchiveMode.Create)) { }
+    var extractionReports = new List<ArchiveProgress>();
+    var destination = Path.Combine(root, "progress-extract-" + format);
+    await service.ExtractManyAsync([.. archives, emptyArchive, archives[0]], new() { DestinationDirectory = destination,
+        Mode = ExtractionMode.Here, Threads = 2, MemoryLimitBytes = 512UL * 1024 * 1024 }, new ImmediateProgress(extractionReports.Add));
+    CheckBatch(extractionReports, 7, format + " queued extract including empty archive and duplicate input");
+    Check(batchInputs.All(p => Directory.Exists(Path.Combine(destination, Path.GetFileName(p)))), format + " mixed and empty folders extracted");
+    Check(Hash(Path.Combine(destination, "folder-2", "random.bin")) == Hash(Path.Combine(batchInputs[2], "random.bin")), format + " progress batch data intact");
+}
+var noJobsReports = new List<ArchiveProgress>();
+Check((await service.ExtractManyAsync([], new(), new ImmediateProgress(noJobsReports.Add))).Count == 0
+    && noJobsReports.Single().OverallPercent == 100 && noJobsReports[0].TotalJobs == 0, "empty extraction batch finishes without workers");
 var firstFolder = Path.Combine(root, "A");
 var secondFolder = Path.Combine(root, "A (2)");
 Directory.CreateDirectory(firstFolder);
@@ -119,7 +186,9 @@ var encryptedA = Path.Combine(root, "SevenZip-True-True-False.7z");
 var encryptedB = Path.Combine(root, "Zip-True-False-False.zip");
 int prompts = 0;
 service.ResolvePasswordAsync = (_, _) => { Interlocked.Increment(ref prompts); return Task.FromResult<string?>("비밀 pass123!"); };
-await service.ExtractManyAsync([encryptedA, encryptedB], new() { DestinationDirectory = Path.Combine(root, "batch"), Collision = CollisionPolicy.Rename });
+var passwordReports = new List<ArchiveProgress>();
+await service.ExtractManyAsync([encryptedA, encryptedB], new() { DestinationDirectory = Path.Combine(root, "batch"), Collision = CollisionPolicy.Rename }, new ImmediateProgress(passwordReports.Add));
+CheckBatch(passwordReports, 2, "password retry batch");
 Check(prompts == 2, "batch password prompts once per archive");
 Check(Directory.GetFiles(Path.Combine(root, "batch"), "*", SearchOption.AllDirectories).Length == 6, "batch retry commits each archive once");
 var twinA = Path.Combine(root, "twin-a", "logs.zip");
@@ -135,9 +204,11 @@ var victim = Path.Combine(protectedDir, "victim.zip"); File.Copy(twinA, victim);
 var trigger = Path.Combine(protectedDir, "trigger.zip");
 using (var zip = ZipFile.Open(trigger, ZipArchiveMode.Create)) { using var w = new StreamWriter(zip.CreateEntry("victim.zip").Open()); w.Write("would corrupt source"); }
 string victimHash = Hash(victim); bool sourceProtected = false;
-try { await service.ExtractManyAsync([trigger, victim], new() { DestinationDirectory = protectedDir, Mode = ExtractionMode.Here, Collision = CollisionPolicy.Overwrite, Threads = 1 }); }
+var failedReports = new List<ArchiveProgress>();
+try { await service.ExtractManyAsync([trigger, victim], new() { DestinationDirectory = protectedDir, Mode = ExtractionMode.Here, Collision = CollisionPolicy.Overwrite, Threads = 1 }, new ImmediateProgress(failedReports.Add)); }
 catch (ArchiveException) { sourceProtected = true; }
 Check(sourceProtected && Hash(victim) == victimHash, "batch extraction cannot overwrite another source archive");
+CheckBatch(failedReports, 2, "failed extraction batch", completed: false);
 var volumeSource = Path.Combine(root, "volume-source"); Directory.CreateDirectory(volumeSource);
 await File.WriteAllBytesAsync(Path.Combine(volumeSource, "self.7z.002"), random);
 var splitSelfBase = Path.Combine(protectedDir, "self.7z");
@@ -199,6 +270,20 @@ using (var canceled = new CancellationTokenSource())
 }
 var cancelSource = Path.Combine(root, "cancel-source.bin");
 using (var file = File.Create(cancelSource)) for (int i = 0; i < 96; i++) file.Write(random);
+using (var canceled = new CancellationTokenSource())
+{
+    var cancelFolder = Path.Combine(root, "cancel-batch-source"); Directory.CreateDirectory(cancelFolder);
+    File.Copy(cancelSource, Path.Combine(cancelFolder, "large.bin"));
+    var cancellationReports = new List<ArchiveProgress>();
+    bool wasCanceled = false;
+    var output = Path.Combine(root, "cancel-batch-output");
+    var reporting = new ImmediateProgress(p => { cancellationReports.Add(p); if (p.CompletedBytes > 0) canceled.Cancel(); });
+    try { await service.CreateAsync([cancelFolder, batchInputs[0]], new() { PerFolder = true, OutputPath = output, Threads = 1 }, reporting, canceled.Token); }
+    catch (OperationCanceledException) { wasCanceled = true; }
+    Check(wasCanceled && Directory.GetFiles(output).Length < 2, "batch cancel leaves queued or running jobs incomplete");
+    CheckBatch(cancellationReports, 2, "canceled create batch", completed: false);
+    Check(!Directory.GetDirectories(output).Any(p => Path.GetFileName(p).StartsWith(".7zipper-")), "batch cancel staging cleanup");
+}
 using (var canceled = new CancellationTokenSource())
 {
     bool wasCanceled = false;

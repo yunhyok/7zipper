@@ -69,18 +69,20 @@ public sealed partial class ArchiveService
             int parallel = Math.Min(paths.Count, Math.Min(4, Math.Min(threads, (int)Math.Min(int.MaxValue, memory / (256UL * 1024 * 1024)))));
             parallel = Math.Max(1, parallel);
             var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var jobs = paths.Select(path =>
+            var jobs = paths.Select((path, index) =>
             {
                 var output = UniqueOutput(Path.Combine(outputDirectory, Path.GetFileName(path) + Extension(options.Format)), reserved);
                 reserved.Add(output);
-                return (path, output);
+                return (path, output, index);
             }).ToArray();
+            var batch = new BatchProgress(jobs.Length, progress);
             await Parallel.ForEachAsync(jobs, new ParallelOptions { MaxDegreeOfParallelism = parallel, CancellationToken = cancellation }, async (item, token) =>
             {
                 var local = CopyOptions(options, item.output);
                 var completed = await CreateOneAsync([item.path], local, memory / (ulong)parallel, Math.Max(1, threads / parallel),
-                    progress, token, outputReserved: true);
+                    batch[item.index], token, outputReserved: true);
                 foreach (var output in completed) outputs.Add(output);
+                batch[item.index].Complete();
             });
             return outputs.Order(StringComparer.OrdinalIgnoreCase).ToArray();
         }
@@ -214,14 +216,18 @@ public sealed partial class ArchiveService
         try
         {
             var archives = paths.Select(NormalizeArchivePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var batch = new BatchProgress(archives.Length, progress);
             if (archives.Length == 0) return [];
             var protectedSources = ProtectedSources(archives);
             var memory = MemoryBudget.Resolve(options.MemoryLimitBytes);
             int threads = Math.Clamp(options.Threads, 1, Environment.ProcessorCount);
             int count = Math.Max(1, Math.Min(archives.Length, Math.Min(4, Math.Min(threads, (int)Math.Min(int.MaxValue, memory / (256UL * 1024 * 1024))))));
             var results = new ConcurrentBag<string>();
-            await Parallel.ForEachAsync(archives, new ParallelOptions { MaxDegreeOfParallelism = count, CancellationToken = cancellation }, async (archive, token) =>
+            await Parallel.ForEachAsync(Enumerable.Range(0, archives.Length), new ParallelOptions { MaxDegreeOfParallelism = count, CancellationToken = cancellation }, async (index, token) =>
             {
+                var archive = archives[index];
+                var job = batch[index];
+                job.Report(new("파일 확인", 0, 0, archive));
                 var local = new ExtractionOptions { DestinationDirectory = options.DestinationDirectory, Mode = options.Mode,
                     Password = options.Password, SelectedIndices = options.SelectedIndices, Collision = options.Collision };
                 bool retried = false;
@@ -229,7 +235,8 @@ public sealed partial class ArchiveService
                 {
                     try
                     {
-                        foreach (var output in await ExtractOneAsync(archive, local, memory / (ulong)count, Math.Max(1, threads / count), protectedSources, progress, token)) results.Add(output);
+                        foreach (var output in await ExtractOneAsync(archive, local, memory / (ulong)count, Math.Max(1, threads / count), protectedSources, job, token)) results.Add(output);
+                        job.Complete();
                         break;
                     }
                     catch (ArchiveException error) when (error.IsPasswordError && ResolvePasswordAsync != null)

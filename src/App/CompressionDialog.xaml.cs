@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using SevenZipper.Core;
 
@@ -117,6 +118,9 @@ internal partial class CompressionDialog : Window
 
     private void OnVolumeChanged(object sender, SelectionChangedEventArgs e) =>
         CustomVolume.Visibility = VolumeBox.SelectedItem is Choice<ulong?> { Value: null } ? Visibility.Visible : Visibility.Collapsed;
+
+    private void OnPerformanceExpanded(object sender, RoutedEventArgs e) =>
+        Dispatcher.InvokeAsync(() => ((FrameworkElement)sender).BringIntoView(), DispatcherPriority.Loaded);
 
     private void OnBrowseOutput(object sender, RoutedEventArgs e)
     {

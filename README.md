@@ -23,6 +23,7 @@ Windows용 7z·ZIP 압축 프로그램. 공식 LZMA SDK와 Zstandard 기반 네�
 | ZIP | Deflate·Store·Zstandard, ZIP64 |
 | 암호 | 7z AES-256·파일명 암호화, ZIP AES-256, 기존 ZipCrypto 해제 |
 | 폴더별 압축 | 선택한 폴더마다 별도 압축파일 생성 |
+| 진행률 | 전체 진행률·완료 개수와 현재 압축 파일 진행률을 구분. 여러 압축 파일 작업은 대기 항목까지 포함 |
 | 분할 압축 | 7z `.7z.001…`, ZIP `.z01…` + 마지막 `.zip` |
 | 목록 | 폴더 탐색·전체 검색·선택 해제·무결성 검사 |
 | 알아서풀기 | 단일 파일·단일 최상위 폴더는 지정 위치에 해제. 여러 최상위 항목은 압축파일 이름의 새 폴더에 해제 |
@@ -31,6 +32,8 @@ Windows용 7z·ZIP 압축 프로그램. 공식 LZMA SDK와 Zstandard 기반 네�
 ZIP Zstandard는 압축 방식 93을 지원하는 프로그램 필요. 7z 읽기는 공식 LZMA SDK에 포함된 LZMA/LZMA2/PPMd/Copy 및 필터에 한정. Deflate64 ZIP, SDK에 없는 7z 코덱, RAR·EGG·ALZ는 미지원.
 
 분할 파일은 같은 폴더에 모두 보관할 것. 7z는 첫 `.001`, ZIP은 마지막 `.zip`으로 열기. 다른 조각을 선택해도 시작 파일 자동 검색.
+
+폴더별 압축·여러 압축 파일 해제의 전체 진행률은 압축 파일별 진행 비율의 평균. 화면에 **압축 파일 수 기준**으로 표시하며, 바이트 크기나 남은 시간의 비율은 아님. 여러 파일·폴더를 하나의 압축 파일로 만드는 경우는 전체 입력 바이트 기준.
 
 구형 ZIP 파일명은 UTF-8 표시·유니코드 확장 정보를 우선 사용. 표시가 없는 Unix·macOS 작성본은 유효한 UTF-8, 그 외는 Windows OEM 코드페이지 사용. OEM에서 유효하지 않은 바이트는 CP437로 복원. 두 코드페이지에서 모두 유효한 이름은 OEM 우선.
 
@@ -63,7 +66,7 @@ pwsh ./scripts/build.ps1 -Test -Publish -Installer
 dotnet run --project tests/SevenZipper.Tests -c Release -- --managed
 ```
 
-최신 메뉴·배포 앱 검사는 [v0.1.3 검증 기록](docs/validation-v0.1.3.md), 파일명·드래그 검사는 [v0.1.2 검증 기록](docs/validation-v0.1.2.md), 네이티브 엔진·UI·성능 실측 결과는 [초기 검증 기록](docs/validation.md) 참조.
+최신 진행률·옵션 화면 검사는 [v0.1.4 검증 기록](docs/validation-v0.1.4.md), 메뉴·배포 앱 검사는 [v0.1.3 검증 기록](docs/validation-v0.1.3.md), 파일명·드래그 검사는 [v0.1.2 검증 기록](docs/validation-v0.1.2.md), 네이티브 엔진·UI·성능 실측 결과는 [초기 검증 기록](docs/validation.md) 참조.
 
 ## 05 / 구성 및 라이선스
 
