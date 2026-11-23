@@ -4,7 +4,7 @@
 
 - Windows 11: 파일·폴더 선택 → 오른쪽 클릭 → **더 많은 옵션 표시 → 7Zipper**.
 - 압축: **7z로 압축**, **ZIP으로 압축**, **압축 옵션…**. 파일과 폴더 혼합 선택 가능.
-- 풀기: **여기에 풀기**, **스마트 풀기**. 선택 항목이 모두 .7z, .zip, .7z.001 또는 ZIP 분할 볼륨(.z01 등)일 때 표시.
+- 풀기: **여기에 풀기**, **스마트 풀기**. 선택 항목이 모두 .7z, .zip, 7z 분할 볼륨(.7z.001 등) 또는 ZIP 분할 볼륨(.z01 등)일 때 표시.
 - 선택 경로 전체를 UTF-8 JSON으로 전달. 최대 요청 16 MiB. Explorer에서는 확장자만 확인하며 압축 파일을 읽지 않음.
 - 실행 파일: 셸 DLL과 같은 폴더의 `7Zipper.exe`. 명령줄 인자는 `--shell-request <10진수 파이프 읽기 핸들>`. 선택 경로·암호는 명령줄에 넣지 않음.
 
@@ -43,7 +43,7 @@ ctest --test-dir artifacts/shell-build --output-on-failure
 ISCC.exe installer/7Zipper.iss
 ```
 
-- 결과: `dist\7Zipper-Setup-0.1.4-x64.exe`.
+- 결과: `dist\7Zipper-Setup-0.1.5-x64.exe`.
 - 기본 경로: `{autopf}\7Zipper` (보통 `C:\Program Files\7Zipper`). 설치 경로 화면에서 폴더와 드라이브 선택 가능. 업데이트는 기존 설치 경로를 기본 표시.
 - Explorer 메뉴 추가 여부를 선택할 수 있음. 연결 프로그램 옵션은 기본 해제. 선택해도 Windows 기본 앱은 변경하지 않음.
 - 설치 관리 시험: `/CURRENTUSER`로 관리자 권한 없이 설치하면 등록 위치가 HKCU로 바뀜. 일반 실행의 기본은 관리자 권한이 필요한 모든 사용자 설치.
@@ -58,7 +58,7 @@ ISCC.exe installer/7Zipper.iss
 | 자동: `drag_lifetime` | Unicode·빈 폴더의 드롭 데이터, 비동기 복사 완료, 데이터 참조 유지, 취소 정리, 결과 불명 시 보존. |
 | Windows 클래식 메뉴 API | 임시 사용자 등록으로 .7z에 5개 항목 활성화, 폴더에 압축 3개 항목 표시 확인. 검사 후 임시 등록 제거. |
 | 빌드 | MSVC x64 Release DLL과 Inno Setup 7.1.1 설치 스크립트 컴파일. |
-| 실제 배포본: 폐기 Windows 환경 | 공백을 포함한 사용자 지정 경로 설치, 메뉴와 연결 프로그램 옵션 변경 업데이트, 기본 앱 유지 및 제거 확인. `tests/shell/installer-smoke.ps1 -Installer dist/7Zipper-Setup-0.1.4-x64.exe -DisposableEnvironment`. 기존 설치가 있는 실사용 PC에서 실행하지 말 것. |
+| 실제 배포본: 폐기 Windows 환경 | 공백을 포함한 사용자 지정 경로 설치, 메뉴와 연결 프로그램 옵션 변경 업데이트, 기본 앱 유지 및 제거 확인. `tests/shell/installer-smoke.ps1 -Installer dist/7Zipper-Setup-0.1.5-x64.exe -DisposableEnvironment`. 기존 설치가 있는 실사용 PC에서 실행하지 말 것. |
 | 배포 앱 명령 | 실제 실행 파일로 7z·ZIP 압축, 여기에 풀기·스마트 풀기. 최초 실행과 기존 앱 재사용, 해제 내용 확인. [v0.1.3 검증 기록](validation-v0.1.3.md) 참조. |
 | 실기: 관리자 권한 필요 | 프로그램 파일 기본 경로, 다른 드라이브 설치 및 모든 사용자 등록·제거. |
 | 대화형 자동 검사 | 실제 Explorer로 기본·교체 버튼 드롭과 교체 버튼 Esc 취소, SHA-256·빈 폴더·임시 폴더 정리 확인. [v0.1.2 검증 기록](validation-v0.1.2.md) 참조. |

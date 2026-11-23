@@ -166,8 +166,10 @@ Z7_COM7F_IMF(OutStream::SetSize(UInt64 size)) {
             disk(last).resize(size ? (size - 1) % volume_ + 1 : 0);
             for (U64 i = last + 1; i <= previous; ++i) {
                 const auto where = long_path(path(i));
-                if (!DeleteFileW(where.c_str())) windows_error(L"Cannot remove unused volume", where);
-                files_.paths.erase(where);
+                if (files_.paths.contains(where)) {
+                    if (!DeleteFileW(where.c_str())) windows_error(L"Cannot remove unused volume", where);
+                    files_.paths.erase(where);
+                }
             }
         }
         size_ = size;

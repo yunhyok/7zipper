@@ -69,21 +69,51 @@ internal partial class ExtractionDialog : Window
         if (picker.ShowDialog(this) == true) DestinationBox.Text = picker.FolderName;
     }
 
+    private void OnShowPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (ShowPasswordBox.IsChecked == true)
+        {
+            PasswordText.Text = PasswordInput.Password;
+            PasswordInput.Visibility = Visibility.Collapsed;
+            PasswordText.Visibility = Visibility.Visible;
+            PasswordText.CaretIndex = PasswordText.Text.Length;
+            PasswordText.Focus();
+        }
+        else
+        {
+            PasswordInput.Password = PasswordText.Text;
+            PasswordText.Clear();
+            PasswordText.Visibility = Visibility.Collapsed;
+            PasswordInput.Visibility = Visibility.Visible;
+            PasswordInput.Focus();
+        }
+    }
+
+    private void OnDialogClosed(object? sender, EventArgs e)
+    {
+        PasswordInput.Clear();
+        PasswordText.Clear();
+    }
+
     private void OnAccept(object sender, RoutedEventArgs e)
     {
         try
         {
-            var password = PasswordInput.Password;
+            var destination = _batch && string.IsNullOrWhiteSpace(DestinationBox.Text)
+                ? "" : ArchivePaths.AbsolutePath(DestinationBox.Text, "압축을 풀 위치");
+            if (destination.Length > 0 && File.Exists(destination))
+                throw new ArgumentException("같은 이름의 파일이 있습니다. 폴더 경로를 입력하세요.");
+            var password = ShowPasswordBox.IsChecked == true ? PasswordText.Text : PasswordInput.Password;
             Options = new ExtractionOptions
             {
-                DestinationDirectory = _batch && string.IsNullOrWhiteSpace(DestinationBox.Text)
-                    ? "" : ArchivePaths.AbsolutePath(DestinationBox.Text, "압축을 풀 위치"),
+                DestinationDirectory = destination,
                 Mode = ((Choice<ExtractionMode>)ModeBox.SelectedItem).Value,
                 Password = password.Length == 0 ? null : password,
                 SelectedIndices = ((Choice<uint[]?>)SelectionBox.SelectedItem).Value,
                 Collision = ((Choice<CollisionPolicy>)CollisionBox.SelectedItem).Value
             };
             PasswordInput.Clear();
+            PasswordText.Clear();
             DialogResult = true;
         }
         catch (ArgumentException error)

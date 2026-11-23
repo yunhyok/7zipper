@@ -1,4 +1,5 @@
 using System.IO;
+using SevenZipper.Core;
 
 namespace SevenZipper.App;
 
@@ -27,7 +28,7 @@ internal static class ArchivePaths
         var name = Directory.Exists(first) ? Path.GetFileName(first) : Path.GetFileNameWithoutExtension(first);
         if (string.IsNullOrWhiteSpace(name)) name = "압축 파일";
         var output = Path.Combine(parent, name + extension);
-        for (var number = 2; File.Exists(output) || Directory.Exists(output); number++)
+        for (var number = 2; ArchiveService.OutputExists(output); number++)
             output = Path.Combine(parent, $"{name} ({number}){extension}");
         return output;
     }

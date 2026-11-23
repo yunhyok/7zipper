@@ -40,8 +40,11 @@ bool IsArchivePath(const wchar_t* path) noexcept {
     for (auto supported : {L".7z", L".zip"}) {
         if (CompareStringOrdinal(ext, -1, supported, -1, TRUE) == CSTR_EQUAL) return true;
     }
-    if (ext - path >= 3 && CompareStringOrdinal(ext - 3, -1, L".7z.001", -1, TRUE) == CSTR_EQUAL)
-        return true;
+    if (ext - path >= 3 && CompareStringOrdinal(ext - 3, 3, L".7z", 3, TRUE) == CSTR_EQUAL) {
+        const wchar_t* digit = ext + 1;
+        while (*digit >= L'0' && *digit <= L'9') ++digit;
+        if (!*digit && digit > ext + 1) return true;
+    }
     if (ext[0] != L'.' || (ext[1] != L'z' && ext[1] != L'Z')) return false;
     const wchar_t* end = ext + 2;
     while (*end >= L'0' && *end <= L'9') ++end;

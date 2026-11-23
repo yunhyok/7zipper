@@ -40,9 +40,9 @@ public partial class MainWindow
     private void OnRowMouseUp(object sender, MouseButtonEventArgs e)
     {
         _pressedAt = null;
+        if (Mouse.Captured == EntryGrid) Mouse.Capture(null);
         if (_deferredClick is not { } row) return;
         _deferredClick = null;
-        if (Mouse.Captured == EntryGrid) Mouse.Capture(null);
         if (RowFrom(e.OriginalSource)?.Item is ArchiveRow item && item == row)
         {
             EntryGrid.SelectedItem = row;
@@ -154,8 +154,17 @@ public partial class MainWindow
         DisposeStaging(drag.Staging);
     }
 
-    private void DisposeStaging(DragPreparation staging) =>
-        _dragCleanup = Task.WhenAll(_dragCleanup, Task.Run(staging.Dispose));
+    private void DisposeStaging(DragPreparation staging)
+    {
+        var cleanup = Task.Run(() =>
+        {
+            try { staging.Dispose(); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (ArchiveException) { }
+        });
+        _dragCleanup = _dragCleanup.IsCompleted ? cleanup : Task.WhenAll(_dragCleanup, cleanup);
+    }
 
     private void BeginNativeDrag(PreparedDrag drag)
     {

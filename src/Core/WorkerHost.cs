@@ -66,6 +66,7 @@ public static class WorkerHost
         var jobId = Guid.NewGuid().ToString("N");
         ulong metadataBytes = 0;
         WorkerMessage? result = null;
+        using var exitSignal = new CancellationTokenSource();
         try
         {
             await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request)).ConfigureAwait(false);
@@ -76,8 +77,12 @@ public static class WorkerHost
                 try { process.StandardInput.WriteLine("cancel"); process.StandardInput.Flush(); } catch { }
                 _ = Task.Run(async () =>
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(3));
-                    try { if (!process.HasExited) process.Kill(true); } catch (InvalidOperationException) { }
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(3), exitSignal.Token).ConfigureAwait(false);
+                        if (!process.HasExited) process.Kill(true);
+                    }
+                    catch { }
                 });
             });
             while (await process.StandardOutput.ReadLineAsync().ConfigureAwait(false) is { } line)
@@ -103,6 +108,7 @@ public static class WorkerHost
         }
         finally
         {
+            exitSignal.Cancel();
             try { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } }
             catch (InvalidOperationException) { }
         }

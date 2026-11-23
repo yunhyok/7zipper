@@ -39,6 +39,8 @@ internal static class ProgressDisplayChecks
             Pump();
             Check(task.IsCompletedSuccessfully && task.Result && Bar(window, "JobProgress").Value == 100,
                 "successful work completes overall progress");
+            Check(Text(window, "ProgressCountText").Contains("4/4"),
+                "completed batch synchronizes final archive count even without a final async progress tick");
             Check(((FrameworkElement)window.FindName("CurrentProgressPanel")).Visibility == Visibility.Collapsed,
                 "current progress row clears after completion");
 

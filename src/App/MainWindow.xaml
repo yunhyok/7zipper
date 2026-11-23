@@ -4,7 +4,8 @@
         Title="7Zipper" Style="{StaticResource AppWindow}"
         Width="1060" Height="690" MinWidth="520" MinHeight="400"
         WindowStartupLocation="CenterScreen" AllowDrop="True"
-        DragOver="OnFilesDragOver" Drop="OnFilesDropped" PreviewKeyDown="OnShortcut"
+        DragEnter="OnFilesDragEnter" DragOver="OnFilesDragOver" DragLeave="OnFilesDragLeave"
+        Drop="OnFilesDropped" PreviewKeyDown="OnShortcut"
         Closing="OnClosing">
     <Grid x:Name="LayoutRoot" Margin="14">
         <Grid.RowDefinitions>
@@ -37,7 +38,7 @@
                     </StackPanel>
                 </Button>
                 <Button x:Name="TestButton" Click="OnTest" Style="{StaticResource Action}"
-                        ToolTip="압축 파일 무결성 검사" AutomationProperties.Name="무결성 검사">
+                        ToolTip="압축 파일 무결성 검사 (Ctrl+T)" AutomationProperties.Name="무결성 검사">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE9D9;" Margin="0,0,7,0" />
                         <TextBlock Text="무결성 검사" />
@@ -73,7 +74,7 @@
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE80F;" />
                         </Button>
                         <Button x:Name="UpButton" Click="OnUp" Style="{StaticResource NavAction}"
-                                ToolTip="상위 폴더 (Backspace)" AutomationProperties.Name="상위 폴더">
+                                ToolTip="상위 폴더 (Backspace / Alt+↑)" AutomationProperties.Name="상위 폴더">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE74A;" />
                         </Button>
                     </StackPanel>
@@ -81,12 +82,12 @@
                              Style="{StaticResource Field}" AutomationProperties.Name="현재 압축 폴더" />
                     <Grid Grid.Column="2" Margin="10,0,0,0">
                         <TextBox x:Name="SearchBox" TextChanged="OnSearchChanged" Style="{StaticResource Field}"
-                                 Padding="29,4,7,4" AutomationProperties.Name="압축 파일 전체 검색"
+                                 Padding="29,4,28,4" AutomationProperties.Name="압축 파일 전체 검색"
                                  ToolTip="압축 파일 전체 검색 (Ctrl+F)" />
                         <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Margin="8,0,0,0"
                                    HorizontalAlignment="Left" Foreground="{StaticResource MutedBrush}" IsHitTestVisible="False" />
                         <TextBlock Text="이름 또는 경로 검색" Foreground="{StaticResource MutedBrush}"
-                                   VerticalAlignment="Center" Margin="29,0,6,0" TextTrimming="CharacterEllipsis" IsHitTestVisible="False">
+                                   VerticalAlignment="Center" Margin="29,0,28,0" TextTrimming="CharacterEllipsis" IsHitTestVisible="False">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -98,6 +99,21 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
+                        <Button x:Name="SearchClearButton" Click="OnClearSearch" HorizontalAlignment="Right"
+                                VerticalAlignment="Center" Margin="0,0,4,0" ToolTip="검색어 지우기 (Esc)"
+                                AutomationProperties.Name="검색어 지우기">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ClearButton}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Style="{StaticResource Icon}" FontSize="11" Text="&#xE711;" />
+                        </Button>
                     </Grid>
                 </Grid>
 
@@ -187,6 +203,9 @@
                             <ContextMenu x:Name="EntryMenu" Opened="OnEntryMenuOpened">
                                 <MenuItem x:Name="OpenFolderMenu" Header="폴더 열기" Click="OnOpenFolder" />
                                 <MenuItem x:Name="ExtractSelectionMenu" Header="선택 항목 압축 풀기" Click="OnExtract" />
+                                <Separator />
+                                <MenuItem x:Name="CopyPathMenu" Header="경로 복사" Click="OnCopyPath" />
+                                <MenuItem x:Name="SelectAllMenu" Header="전체 선택 (Ctrl+A)" Click="OnSelectAll" />
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                     </DataGrid>
@@ -212,8 +231,11 @@
                 <DockPanel LastChildFill="True">
                     <Button x:Name="CancelButton" DockPanel.Dock="Right" Content="취소" Click="OnCancel"
                             Style="{StaticResource Action}" IsEnabled="False" MinHeight="30" Padding="12,4" Margin="6,0,0,0" />
-                    <ToggleButton x:Name="LogToggle" DockPanel.Dock="Right" Content="작업 기록" Margin="10,0,0,0"
-                                  MinHeight="30" Padding="10,4" ToolTip="작업 기록을 펼치거나 접습니다." Checked="OnLogOpened" />
+                    <ToggleButton x:Name="LogToggle" DockPanel.Dock="Right" Content="작업 기록" Margin="6,0,0,0"
+                                  Style="{StaticResource ActionToggle}" ToolTip="작업 기록을 펼치거나 접습니다." Checked="OnLogOpened" />
+                    <Button x:Name="OpenResultButton" DockPanel.Dock="Right" Content="폴더 열기" Click="OnOpenResult"
+                            Style="{StaticResource Action}" Visibility="Collapsed" MinHeight="30" Padding="10,4" Margin="10,0,0,0"
+                            ToolTip="결과 파일 또는 폴더를 파일 탐색기에서 엽니다." AutomationProperties.Name="결과 폴더 열기" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock x:Name="TaskTitle" Text="준비됨" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.LiveSetting="Polite" />
@@ -243,6 +265,18 @@
                         <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="DropOverlay" Grid.RowSpan="3" Visibility="Collapsed" IsHitTestVisible="False"
+                Background="#CC15181D" BorderBrush="{StaticResource FocusBrush}" BorderThickness="2" CornerRadius="8">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
+                <TextBlock Style="{StaticResource Icon}" FontSize="36" Text="&#xE896;"
+                           Foreground="{StaticResource FocusBrush}" HorizontalAlignment="Center" Margin="0,0,0,10" />
+                <TextBlock x:Name="DropOverlayTitle" Text="여기에 놓으세요" Style="{StaticResource Heading}"
+                           TextAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock x:Name="DropOverlayHint" Text="" Style="{StaticResource Muted}"
+                           Margin="0,6,0,0" TextAlignment="Center" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
     </Grid>

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using SevenZipper.Core;
@@ -12,13 +13,21 @@ internal partial class CompressionDialog : Window
 {
     private sealed record SourceItem(string Path)
     {
-        public string Name => System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(Path));
+        public string Name
+        {
+            get
+            {
+                var name = System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(Path));
+                return string.IsNullOrEmpty(name) ? Path : name;
+            }
+        }
     }
 
     private const ulong MiB = 1024 * 1024;
     private readonly ObservableCollection<SourceItem> _inputs = [];
     private string _suggestedOutput = "";
     private bool _initialized;
+    private bool _syncingPassword;
 
     public CompressionDialog(IEnumerable<string> inputs)
     {
@@ -27,8 +36,7 @@ internal partial class CompressionDialog : Window
         InputList.ItemsSource = _inputs;
         FormatBox.ItemsSource = new[] { "7z", "ZIP", "ZIP · Zstandard" };
         FormatBox.SelectedIndex = 0;
-        LevelBox.ItemsSource = new[] { "빠르게", "보통", "최대" };
-        LevelBox.SelectedIndex = 1;
+        UpdateLevelChoices(defaultNormal: true);
         VolumeBox.ItemsSource = new Choice<ulong?>[]
         {
             new("분할 안 함", 0), new("100 MiB", 100 * MiB), new("650 MiB", 650 * MiB),
@@ -53,6 +61,18 @@ internal partial class CompressionDialog : Window
 
     private string Extension => Format == ArchiveFormat.SevenZip ? ".7z" : ".zip";
 
+    private void UpdateLevelChoices(bool defaultNormal = false)
+    {
+        var previousLabel = (LevelBox.SelectedItem as Choice<int>)?.Label;
+        Choice<int>[] choices = Format == ArchiveFormat.ZipZstandard
+            ? [new("빠르게", 1), new("보통", 3), new("최대", 9)]
+            : [new("저장만 (무압축)", 0), new("빠르게", 3), new("보통", 5), new("최대", 9)];
+        LevelBox.ItemsSource = choices;
+        var index = defaultNormal ? Array.FindIndex(choices, item => item.Label == "보통")
+            : Array.FindIndex(choices, item => item.Label == previousLabel);
+        LevelBox.SelectedIndex = index >= 0 ? index : 0;
+    }
+
     private void OnAddFiles(object sender, RoutedEventArgs e)
     {
         var picker = new OpenFileDialog { Title = "압축할 파일 선택", Multiselect = true };
@@ -68,9 +88,36 @@ internal partial class CompressionDialog : Window
     private void AddInputs(IEnumerable<string> inputs)
     {
         var known = _inputs.Select(item => item.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in inputs)
-            if (known.Add(item)) _inputs.Add(new SourceItem(item));
+        foreach (var raw in inputs)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(raw));
+            if (known.Add(normalized)) _inputs.Add(new SourceItem(normalized));
+        }
         UpdateSuggestedOutput();
+    }
+
+    private void OnInputDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
+            ? e.AllowedEffects & DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnInputDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
+            AddInputs(files);
+    }
+
+    private void OnInputKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && RemoveButton.IsEnabled)
+        {
+            OnRemove(sender, e);
+            e.Handled = true;
+        }
     }
 
     private void OnInputSelection(object sender, SelectionChangedEventArgs e) =>
@@ -94,6 +141,7 @@ internal partial class CompressionDialog : Window
     private void OnFormatChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_initialized) return;
+        UpdateLevelChoices();
         UpdatePasswordState();
         UpdateSuggestedOutput();
         if (PerFolderBox.IsChecked != true && OutputBox.Text.Length > 0)
@@ -107,12 +155,65 @@ internal partial class CompressionDialog : Window
         UpdateSuggestedOutput(replace: true);
     }
 
-    private void OnPasswordChanged(object sender, RoutedEventArgs e) => UpdatePasswordState();
+    private void OnPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (_syncingPassword) return;
+        UpdatePasswordState();
+    }
+
+    private void OnPasswordTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_syncingPassword) return;
+        UpdatePasswordState();
+    }
+
+    private void OnShowPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        _syncingPassword = true;
+        try
+        {
+            if (ShowPasswordBox.IsChecked == true)
+            {
+                PasswordText.Text = PasswordInput.Password;
+                PasswordInput.Visibility = Visibility.Collapsed;
+                PasswordText.Visibility = Visibility.Visible;
+                PasswordText.CaretIndex = PasswordText.Text.Length;
+                PasswordText.Focus();
+            }
+            else
+            {
+                PasswordInput.Password = PasswordText.Text;
+                PasswordText.Clear();
+                PasswordText.Visibility = Visibility.Collapsed;
+                PasswordInput.Visibility = Visibility.Visible;
+                PasswordInput.Focus();
+            }
+        }
+        finally { _syncingPassword = false; }
+        UpdatePasswordState();
+    }
+
+    private bool HasPassword()
+    {
+        if (ShowPasswordBox.IsChecked == true) return PasswordText.Text.Length > 0;
+        using var securePassword = PasswordInput.SecurePassword;
+        return securePassword.Length > 0;
+    }
+
+    private string ReadPassword() => ShowPasswordBox.IsChecked == true ? PasswordText.Text : PasswordInput.Password;
+
+    private void ClearPasswords()
+    {
+        _syncingPassword = true;
+        try { PasswordInput.Clear(); PasswordText.Clear(); }
+        finally { _syncingPassword = false; }
+    }
+
+    private void OnDialogClosed(object? sender, EventArgs e) => ClearPasswords();
 
     private void UpdatePasswordState()
     {
-        using var securePassword = PasswordInput.SecurePassword;
-        EncryptHeadersBox.IsEnabled = Format == ArchiveFormat.SevenZip && securePassword.Length > 0;
+        EncryptHeadersBox.IsEnabled = Format == ArchiveFormat.SevenZip && HasPassword();
         if (!EncryptHeadersBox.IsEnabled) EncryptHeadersBox.IsChecked = false;
     }
 
@@ -157,29 +258,46 @@ internal partial class CompressionDialog : Window
             var paths = Inputs;
             if (paths.Any(path => !File.Exists(path) && !Directory.Exists(path)))
                 throw new ArgumentException("목록에 존재하지 않는 파일이나 폴더가 있습니다.");
+            if (paths.Any(path => string.IsNullOrEmpty(Path.GetFileName(Path.TrimEndingDirectorySeparator(path)))))
+                throw new ArgumentException("드라이브 전체 대신 하위 폴더를 선택하세요.");
 
             var perFolder = PerFolderBox.IsChecked == true;
             if (perFolder && paths.Any(path => !Directory.Exists(path)))
                 throw new ArgumentException("폴더별 압축을 사용하려면 목록에 폴더만 남겨 주세요.");
 
             var output = ArchivePaths.AbsolutePath(OutputBox.Text, "저장 위치");
-            if (!perFolder) output = WithArchiveExtension(output);
-            if (!perFolder && File.Exists(output))
-                throw new ArgumentException("같은 이름의 압축 파일이 있습니다. 다른 저장 경로를 입력하세요.");
+            if (perFolder)
+            {
+                if (File.Exists(output))
+                    throw new ArgumentException("저장 위치에 같은 이름의 파일이 있습니다. 폴더 경로를 입력하세요.");
+                if (paths.Any(path => output.Equals(path, StringComparison.OrdinalIgnoreCase)
+                    || output.StartsWith(path + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                    throw new ArgumentException("폴더별 압축의 저장 위치는 원본 폴더 바깥으로 지정하세요.");
+            }
+            else
+            {
+                output = WithArchiveExtension(output);
+                if (paths.Any(path => string.Equals(path, output, StringComparison.OrdinalIgnoreCase)))
+                    throw new ArgumentException("원본 파일을 저장 위치로 지정할 수 없습니다.");
+                if (ArchiveService.OutputExists(output))
+                    throw new ArgumentException("같은 이름의 압축 파일, 분할 볼륨 또는 폴더가 있습니다. 다른 저장 경로를 입력하세요.");
+            }
             if (!int.TryParse(ThreadsBox.Text, out var threads) || threads < 1 || threads > Environment.ProcessorCount)
                 throw new ArgumentException($"CPU 스레드 수는 1에서 {Environment.ProcessorCount} 사이로 입력하세요.");
             if (!ulong.TryParse(MemoryBox.Text, out var memory) || memory > ulong.MaxValue / MiB)
                 throw new ArgumentException("메모리 한도를 MiB 단위의 정수로 입력하세요.");
+            if (memory != 0 && memory < 64)
+                throw new ArgumentException("메모리 한도는 0(자동) 또는 64 MiB 이상으로 입력하세요.");
 
-            var level = Format == ArchiveFormat.ZipZstandard ? new[] { 1, 3, 9 } : new[] { 3, 5, 9 };
-            var password = PasswordInput.Password;
+            var level = ((Choice<int>)LevelBox.SelectedItem).Value;
+            var password = ReadPassword();
             Options = new CompressionOptions
             {
-                Format = Format, Level = level[LevelBox.SelectedIndex], Threads = threads, MemoryLimitBytes = memory * MiB,
+                Format = Format, Level = level, Threads = threads, MemoryLimitBytes = memory * MiB,
                 VolumeBytes = ReadVolume(), Password = password.Length == 0 ? null : password,
                 EncryptHeaders = EncryptHeadersBox.IsChecked == true, PerFolder = perFolder, OutputPath = output
             };
-            PasswordInput.Clear();
+            ClearPasswords();
             DialogResult = true;
         }
         catch (ArgumentException error)

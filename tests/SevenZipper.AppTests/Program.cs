@@ -16,6 +16,7 @@ internal static class Program
         {
             CheckRequestRouting();
             CheckInstanceNames();
+            CheckArchiveContentsCaseInsensitive();
             return 0;
         }
         catch (Exception error)
@@ -70,6 +71,28 @@ internal static class Program
         Check(standard != elevated && actual != Name(account, session + 1, actual == elevated)
             && (actual == standard || actual == elevated), "IPC name uses the current token's SID, session and elevation");
         Console.WriteLine("IPC names distinguish session and elevation. Current token query passed.");
+    }
+
+    private static void CheckArchiveContentsCaseInsensitive()
+    {
+        var contentsType = typeof(App).Assembly.GetType("SevenZipper.App.ArchiveContents")!;
+        ArchiveEntry[] entries =
+        [
+            new(0, "Folder", 0, 0, true, false, "", null),
+            new(1, "folder/readme.txt", 1024, 512, false, false, "Deflate", null),
+            new(2, "FOLDER/Sub/data.bin", 2048, 1024, false, false, "Deflate", null)
+        ];
+        var contents = Activator.CreateInstance(contentsType, [entries])!;
+        var browse = contentsType.GetMethod("Browse")!;
+        var rootRows = (Array)browse.Invoke(contents, ["", ""])!;
+        Check(rootRows.Length == 1, "case-differing archive folders merge into one root folder");
+        var folderRows = (Array)browse.Invoke(contents, ["Folder", ""])!;
+        Check(folderRows.Length == 2, "browsing case-differing folder lists all children");
+        var selection = (uint[])contentsType.GetMethod("Selection")!.Invoke(contents, [rootRows])!;
+        Check(selection.SequenceEqual([0u, 1u, 2u]), "selecting merged folder includes all nested entries regardless of case");
+        var selectedSize = (ulong)contentsType.GetMethod("SelectionSize")!.Invoke(contents, [rootRows])!;
+        Check(selectedSize == 3072UL, "selection size sums nested files accurately");
+        Console.WriteLine("Case-insensitive archive folder browsing and selection passed.");
     }
 
     private static MethodInfo AppMethod(string name) => typeof(AppProgram).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!;

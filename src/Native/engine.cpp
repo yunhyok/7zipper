@@ -329,4 +329,4 @@ int SZ_CALL sz_test(const wchar_t* archive, const sz_read_options* opt, sz_progr
     return run([&] { read_archive(archive, nullptr, {nullptr, 0}, opt, nullptr, progress, context); });
 }
 const wchar_t* SZ_CALL sz_last_error() { return error.c_str(); }
-const wchar_t* SZ_CALL sz_version() { return L"7Zipper native 0.1.4 / LZMA SDK 26.06 / minizip-ng 4.2.2 / zlib 1.4 / Zstandard 1.5.7"; }
+const wchar_t* SZ_CALL sz_version() { return L"7Zipper native 0.1.5 / LZMA SDK 26.06 / minizip-ng 4.2.2 / zlib 1.4 / Zstandard 1.5.7"; }

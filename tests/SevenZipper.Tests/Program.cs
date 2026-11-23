@@ -48,6 +48,34 @@ CompleteAggregate(1);
 Check(aggregateReports[^1].OverallPercent < 100 && aggregateReports[^1].CompletedJobs == 2, "empty job completes only when committed");
 CompleteAggregate(2);
 CheckBatch(aggregateReports, 3, "deterministic batch");
+
+Check(PathSafety.IsDeviceName("CON") && PathSafety.IsDeviceName("NUL.txt") && !PathSafety.IsDeviceName("console.txt"), "device name check");
+var stemMethod = typeof(ArchiveService).GetMethod("ArchiveStem", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+Check((string)stemMethod.Invoke(null, [@"C:\temp\report..zip"])! == "report", "archive stem trims trailing dots");
+Check((string)stemMethod.Invoke(null, [@"C:\temp\CON.zip"])! == "CON_", "archive stem avoids Windows device names");
+var managedTemp = Path.Combine(Path.GetTempPath(), "7zipper-managed-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(managedTemp);
+try
+{
+    var splitCheck = Path.Combine(managedTemp, "demo.7z");
+    File.WriteAllText(splitCheck + ".001", "part1");
+    Check(ArchiveService.OutputExists(splitCheck), "OutputExists detects existing 7z split volume");
+    var zipSplitCheck = Path.Combine(managedTemp, "demo.zip");
+    File.WriteAllText(Path.Combine(managedTemp, "demo.z01"), "part1");
+    Check(ArchiveService.OutputExists(zipSplitCheck), "OutputExists detects existing ZIP split volume");
+
+    var ownedParent = Path.Combine(managedTemp, "owned");
+    var ownedId = Guid.NewGuid().ToString("N");
+    var ownedDir = Path.Combine(ownedParent, ownedId);
+    var roSub = Path.Combine(ownedDir, "readonly-sub");
+    Directory.CreateDirectory(roSub);
+    File.WriteAllText(Path.Combine(roSub, "f.txt"), "data");
+    File.SetAttributes(roSub, FileAttributes.Directory | FileAttributes.ReadOnly);
+    PathSafety.DeleteOwnedDirectory(ownedDir, ownedParent);
+    Check(!Directory.Exists(ownedDir), "DeleteOwnedDirectory deletes read-only subdirectories");
+}
+finally { if (Directory.Exists(managedTemp)) Directory.Delete(managedTemp, true); }
+
 if (args.Contains("--managed")) { Console.WriteLine($"PASS {assertions} managed assertions"); return 0; }
 
 var parent = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/test-work"));

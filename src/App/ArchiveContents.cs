@@ -10,23 +10,35 @@ internal sealed class ArchiveContents
 
     public ArchiveContents(IReadOnlyList<ArchiveEntry> entries)
     {
-        var directories = new Dictionary<string, ArchiveRow>(StringComparer.Ordinal);
+        var directories = new Dictionary<string, ArchiveRow>(StringComparer.OrdinalIgnoreCase);
         var files = new List<ArchiveRow>();
+        ulong totalSize = 0, totalPacked = 0;
         foreach (var entry in entries)
         {
             var path = entry.Path.Replace('\\', '/').TrimEnd('/');
             if (entry.IsDirectory) directories[path] = new ArchiveRow(path, entry, true);
-            else files.Add(new ArchiveRow(path, entry, false));
+            else
+            {
+                files.Add(new ArchiveRow(path, entry, false));
+                totalSize += entry.Size;
+                totalPacked += entry.PackedSize;
+            }
             for (var parent = Parent(path); parent.Length > 0; parent = Parent(parent))
                 if (!directories.TryAdd(parent, new ArchiveRow(parent, null, true))) break;
         }
         _rows = directories.Values.OrderBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase)
             .Concat(files.OrderBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase)).ToArray();
-        _folders = _rows.ToLookup(row => Parent(row.Path), StringComparer.Ordinal);
+        _folders = _rows.ToLookup(row => Parent(row.Path), StringComparer.OrdinalIgnoreCase);
         TotalCount = entries.Count;
+        FileCount = files.Count;
+        TotalSize = totalSize;
+        TotalPackedSize = totalPacked;
     }
 
     public int TotalCount { get; }
+    public int FileCount { get; }
+    public ulong TotalSize { get; }
+    public ulong TotalPackedSize { get; }
 
     public ArchiveRow[] Browse(string folder, string search) => search.Length == 0
         ? _folders[folder].ToArray()
@@ -35,7 +47,7 @@ internal sealed class ArchiveContents
     public uint[] Selection(IEnumerable<ArchiveRow> rows)
     {
         var indices = new HashSet<uint>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var pending = new Stack<ArchiveRow>(rows);
         while (pending.TryPop(out var row))
         {
@@ -44,6 +56,20 @@ internal sealed class ArchiveContents
             foreach (var child in _folders[row.Path]) pending.Push(child);
         }
         return indices.Order().ToArray();
+    }
+
+    public ulong SelectionSize(IEnumerable<ArchiveRow> rows)
+    {
+        ulong total = 0;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Stack<ArchiveRow>(rows);
+        while (pending.TryPop(out var row))
+        {
+            if (!seen.Add(row.Path)) continue;
+            if (!row.IsDirectory) total += row.Size;
+            else foreach (var child in _folders[row.Path]) pending.Push(child);
+        }
+        return total;
     }
 
     public static string Parent(string path)

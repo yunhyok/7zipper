@@ -45,31 +45,89 @@ internal sealed class TaskDialog : Window
         var reason = retry ? "암호를 확인하고 다시 입력하세요." : "이 압축 파일을 읽으려면 암호가 필요합니다.";
         var dialog = new TaskDialog(owner, "압축 파일 암호", $"{archive}\n\n{reason}");
         var input = new PasswordBox { Style = (Style)dialog.FindResource("PasswordField"), Margin = new(0, 10, 0, 0) };
+        var visibleInput = new TextBox
+        {
+            Style = (Style)dialog.FindResource("Field"),
+            Margin = new(0, 10, 0, 0),
+            Visibility = Visibility.Collapsed
+        };
         AutomationProperties.SetName(input, "압축 파일 암호");
+        AutomationProperties.SetName(visibleInput, "압축 파일 암호");
+        var reveal = new CheckBox { Content = "암호 표시", Margin = new(0, 7, 0, 0) };
         dialog._body.Children.Add(input);
+        dialog._body.Children.Add(visibleInput);
+        dialog._body.Children.Add(reveal);
         dialog.AddButton("취소", null, isCancel: true);
         var confirm = dialog.AddButton("확인", () => dialog.DialogResult = true, isDefault: true);
         confirm.IsEnabled = false;
+        var syncing = false;
+        void UpdateConfirm()
+        {
+            if (reveal.IsChecked == true) confirm.IsEnabled = visibleInput.Text.Length > 0;
+            else
+            {
+                using var securePassword = input.SecurePassword;
+                confirm.IsEnabled = securePassword.Length > 0;
+            }
+        }
         input.PasswordChanged += (_, _) =>
         {
-            using var securePassword = input.SecurePassword;
-            confirm.IsEnabled = securePassword.Length > 0;
+            if (syncing) return;
+            UpdateConfirm();
+        };
+        visibleInput.TextChanged += (_, _) =>
+        {
+            if (syncing) return;
+            UpdateConfirm();
+        };
+        reveal.Checked += (_, _) =>
+        {
+            syncing = true;
+            visibleInput.Text = input.Password;
+            input.Visibility = Visibility.Collapsed;
+            visibleInput.Visibility = Visibility.Visible;
+            visibleInput.CaretIndex = visibleInput.Text.Length;
+            syncing = false;
+            UpdateConfirm();
+            visibleInput.Focus();
+        };
+        reveal.Unchecked += (_, _) =>
+        {
+            syncing = true;
+            input.Password = visibleInput.Text;
+            visibleInput.Clear();
+            visibleInput.Visibility = Visibility.Collapsed;
+            input.Visibility = Visibility.Visible;
+            syncing = false;
+            UpdateConfirm();
+            input.Focus();
         };
         dialog.Loaded += (_, _) => input.Focus();
-        var password = dialog.ShowDialog() == true ? input.Password : null;
+        var password = dialog.ShowDialog() == true
+            ? (reveal.IsChecked == true ? visibleInput.Text : input.Password)
+            : null;
         input.Clear();
+        visibleInput.Clear();
         return password;
     }
 
-    public static CollisionPolicy AskCollision(Window owner, string path)
+    public static CollisionPolicy AskCollision(Window owner, string path, out bool applyToAll)
     {
         var dialog = new TaskDialog(owner, "같은 이름의 항목이 있습니다", path);
+        var applyAllBox = new CheckBox { Content = "이후 모든 같은 이름 항목에 적용", Margin = new(0, 10, 0, 0) };
+        dialog._body.Children.Add(applyAllBox);
         CollisionPolicy result = CollisionPolicy.Skip;
         dialog.AddButton("취소", null, isCancel: true);
         dialog.AddButton("건너뛰기", () => Select(CollisionPolicy.Skip), isDefault: true);
         dialog.AddButton("이름 바꾸기", () => Select(CollisionPolicy.Rename));
         dialog.AddButton("덮어쓰기", () => Select(CollisionPolicy.Overwrite));
-        return dialog.ShowDialog() == true ? result : throw new OperationCanceledException();
+        if (dialog.ShowDialog() == true)
+        {
+            applyToAll = applyAllBox.IsChecked == true;
+            return result;
+        }
+        applyToAll = false;
+        throw new OperationCanceledException();
 
         void Select(CollisionPolicy policy)
         {

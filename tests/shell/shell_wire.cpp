@@ -113,9 +113,15 @@ int wmain(int argc, wchar_t** argv) {
         const auto archive = job / L"Explorer archive.zip";
         constexpr char emptyZip[22] = {'P', 'K', '\x05', '\x06'};
         assert(std::ofstream(archive, std::ios::binary).write(emptyZip, sizeof(emptyZip)));
+        const auto splitPart = job / L"split.7z.002";
+        assert(std::ofstream(splitPart, std::ios::binary).put('x'));
+        const auto notSplit = job / L"split.7z.txt";
+        assert(std::ofstream(notSplit, std::ios::binary).put('x'));
         const auto folder = job / L"Ordinary folder.7z";
         assert(fs::create_directory(folder));
-        const std::pair<fs::path, EXPCMDSTATE> checks[] = {{archive, ECS_ENABLED}, {folder, ECS_HIDDEN}};
+        const std::pair<fs::path, EXPCMDSTATE> checks[] = {
+            {archive, ECS_ENABLED}, {splitPart, ECS_ENABLED}, {notSplit, ECS_HIDDEN}, {folder, ECS_HIDDEN}
+        };
         for (const auto& [path, expected] : checks) {
             PIDLIST_ABSOLUTE pidl = nullptr;
             assert(SUCCEEDED(SHParseDisplayName(path.c_str(), nullptr, &pidl, 0, nullptr)));
@@ -127,7 +133,7 @@ int wmain(int argc, wchar_t** argv) {
             for (auto action : {3, 4})
                 assert(SUCCEEDED(actions[action]->GetState(singleItem.get(), FALSE, &state)) && state == expected);
         }
-        assert(fs::remove(archive) && fs::remove(folder));
+        assert(fs::remove(archive) && fs::remove(splitPart) && fs::remove(notSplit) && fs::remove(folder));
 
         assert(SUCCEEDED(actions[0]->Invoke(items.get(), nullptr)));
         for (int retry = 0; retry < 500 && !fs::exists(capture); ++retry) Sleep(10);

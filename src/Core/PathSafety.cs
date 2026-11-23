@@ -36,6 +36,8 @@ public static partial class PathSafety
     [GeneratedRegex(@"^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[0-9¹²³]|LPT[0-9¹²³])(?:\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DeviceName();
 
+    public static bool IsDeviceName(string name) => !string.IsNullOrEmpty(name) && DeviceName().IsMatch(name);
+
     public static string ValidateEntryName(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.StartsWith('/') || name.StartsWith('\\'))
@@ -124,6 +126,9 @@ public static partial class PathSafety
             if ((attributes & FileAttributes.Directory) != 0) DeleteTreeWithoutLinks(item);
             else { File.SetAttributes(item, FileAttributes.Normal); File.Delete(item); }
         }
+        var dirAttributes = File.GetAttributes(directory);
+        if ((dirAttributes & FileAttributes.ReadOnly) != 0)
+            File.SetAttributes(directory, dirAttributes & ~FileAttributes.ReadOnly);
         Directory.Delete(directory);
     }
 }

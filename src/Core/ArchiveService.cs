@@ -32,7 +32,9 @@ public sealed partial class ArchiveService
     {
         var name = Path.GetFileName(path);
         if (SevenZipVolume().IsMatch(name)) name = name[..name.LastIndexOf('.')];
-        return Path.GetFileNameWithoutExtension(name);
+        var stem = Path.GetFileNameWithoutExtension(name).TrimEnd('.', ' ');
+        if (string.IsNullOrWhiteSpace(stem)) return "";
+        return PathSafety.IsDeviceName(stem) ? stem + "_" : stem;
     }
 
     public async Task<IReadOnlyList<ArchiveEntry>> ListAsync(string path, string? password = null, CancellationToken cancellation = default)
@@ -97,7 +99,7 @@ public sealed partial class ArchiveService
             desired = Path.Combine(parent, $"{stem} ({n}){extension}");
         return desired;
     }
-    private static bool OutputExists(string path) => File.Exists(path) || Directory.Exists(path)
+    public static bool OutputExists(string path) => File.Exists(path) || Directory.Exists(path)
         || File.Exists(path + ".001") || File.Exists(Path.ChangeExtension(path, ".z01"));
     private static string Extension(ArchiveFormat format) => format == ArchiveFormat.SevenZip ? ".7z" : ".zip";
     private static CompressionOptions CopyOptions(CompressionOptions x, string output) => new() { Format = x.Format, Level = x.Level,
@@ -350,6 +352,9 @@ public sealed partial class ArchiveService
                         {
                             PathSafety.RejectReparseAncestors(target);
                             if (protectedSources.Contains(PathSafety.ResolveExistingFile(target))) throw new ArchiveException("원본 압축파일 또는 분할 볼륨을 덮어쓸 수 없습니다.");
+                            var targetAttributes = File.GetAttributes(target);
+                            if ((targetAttributes & FileAttributes.ReadOnly) != 0)
+                                File.SetAttributes(target, targetAttributes & ~FileAttributes.ReadOnly);
                             if (zone != null) WriteZone(source, zone);
                             File.Move(source, target, true);
                             outputs.Add(target);
@@ -381,13 +386,19 @@ public sealed partial class ArchiveService
             {
                 var prefix = Path.GetFileName(path[..path.LastIndexOf('.')]) + ".";
                 foreach (var volume in Directory.EnumerateFiles(directory, prefix + "*"))
-                    if (Path.GetFileName(volume)[prefix.Length..].All(char.IsAsciiDigit)) result.Add(PathSafety.ResolveExistingFile(volume));
+                {
+                    var suffix = Path.GetFileName(volume)[prefix.Length..];
+                    if (suffix.Length > 0 && suffix.All(char.IsAsciiDigit)) result.Add(PathSafety.ResolveExistingFile(volume));
+                }
             }
             else if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
                 var prefix = Path.GetFileNameWithoutExtension(path) + ".z";
                 foreach (var volume in Directory.EnumerateFiles(directory, prefix + "*"))
-                    if (Path.GetFileName(volume)[prefix.Length..].All(char.IsAsciiDigit)) result.Add(PathSafety.ResolveExistingFile(volume));
+                {
+                    var suffix = Path.GetFileName(volume)[prefix.Length..];
+                    if (suffix.Length > 0 && suffix.All(char.IsAsciiDigit)) result.Add(PathSafety.ResolveExistingFile(volume));
+                }
             }
         }
         return result;

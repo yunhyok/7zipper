@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,6 +21,8 @@ public partial class MainWindow : Window
     private string? _password;
     private ArchiveContents? _contents;
     private string _folder = "";
+    private string? _lastOutputPath;
+    private CollisionPolicy? _jobCollisionOverride;
     private bool _dialogOpen;
     private bool _processingRequests;
     private bool _closeRequested;
@@ -36,7 +39,13 @@ public partial class MainWindow : Window
             _searchTimer.Stop();
             RefreshContents();
         };
-        _service.ResolveCollisionAsync = path => PromptAsync(() => TaskDialog.AskCollision(this, path));
+        _service.ResolveCollisionAsync = path => PromptAsync(() =>
+        {
+            if (_jobCollisionOverride is { } remembered) return remembered;
+            var policy = TaskDialog.AskCollision(this, path, out var applyToAll);
+            if (applyToAll) _jobCollisionOverride = policy;
+            return policy;
+        });
         _service.ResolvePasswordAsync = (path, retry) => PromptAsync(() => TaskDialog.AskPassword(this, path, retry));
         SizeChanged += (_, _) =>
         {
@@ -137,10 +146,12 @@ public partial class MainWindow : Window
         _archive = archive;
         _password = password;
         _contents = contents;
-        ArchiveName.Text = Path.GetFileName(archive);
+        var archiveFileName = Path.GetFileName(archive);
+        Title = $"{archiveFileName} - 7Zipper";
+        ArchiveName.Text = archiveFileName;
         ArchiveName.ToolTip = archive;
         Navigate("");
-        return $"{Path.GetFileName(archive)} · {entries.Count:N0}개 항목";
+        return $"{archiveFileName} · {entries.Count:N0}개 항목";
     });
 
     private async void OnCreate(object sender, RoutedEventArgs e) => await ShowCompressionAsync([]);
@@ -197,9 +208,11 @@ public partial class MainWindow : Window
             return DescribeOutputs(outputs);
         });
 
-    private async void OnTest(object sender, RoutedEventArgs e)
+    private async void OnTest(object sender, RoutedEventArgs e) => await TestArchiveAsync();
+
+    private async Task TestArchiveAsync()
     {
-        if (_archive == null) return;
+        if (!TestButton.IsEnabled || _archive == null) return;
         var archive = _archive;
         await RunJobAsync("무결성 검사", async (progress, token) =>
         {
@@ -260,6 +273,9 @@ public partial class MainWindow : Window
         if (!forDrag) DiscardPreparedDrag();
         using var cancellation = new CancellationTokenSource();
         _job = cancellation;
+        _jobCollisionOverride = null;
+        _lastOutputPath = null;
+        OpenResultButton.Visibility = Visibility.Collapsed;
         JobProgress.Value = 0;
         JobProgress.IsIndeterminate = true;
         OverallProgressText.Text = "전체 진행률 · 준비 중";
@@ -268,8 +284,9 @@ public partial class MainWindow : Window
         SetStatus($"{title} 중");
         AddLog($"{title} 시작");
         UpdateControls();
-        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        var elapsed = Stopwatch.StartNew();
         var completedByJob = new Dictionary<string, ulong>();
+        var lastTotalJobs = 0;
         var progress = new Progress<ArchiveProgress>(report =>
         {
             if (_job != cancellation || cancellation.IsCancellationRequested) return;
@@ -280,6 +297,7 @@ public partial class MainWindow : Window
             if (overallPercent is { } value) JobProgress.Value = Math.Clamp(value, 0, 100);
             OverallProgressText.Text = overallPercent == null ? "전체 진행률 · 준비 중"
                 : $"전체 진행률 · {Math.Floor(JobProgress.Value):0}%";
+            lastTotalJobs = report.TotalJobs;
             bool batch = report.TotalJobs > 1;
             ProgressCountText.Text = batch ? $"압축 파일 수 기준 · {report.CompletedJobs}/{report.TotalJobs}개 완료" : "";
             CurrentProgressPanel.Visibility = batch ? Visibility.Visible : Visibility.Collapsed;
@@ -307,6 +325,9 @@ public partial class MainWindow : Window
             var detail = await work(progress, cancellation.Token);
             JobProgress.Value = 100;
             OverallProgressText.Text = "전체 진행률 · 100%";
+            if (lastTotalJobs > 1) ProgressCountText.Text = $"압축 파일 수 기준 · {lastTotalJobs}/{lastTotalJobs}개 완료";
+            if (_lastOutputPath != null && (File.Exists(_lastOutputPath) || Directory.Exists(_lastOutputPath)))
+                OpenResultButton.Visibility = Visibility.Visible;
             SetStatus($"{title} 완료", detail);
             AddLog($"{title} 완료{(detail == null ? "" : $" · {detail}")}");
             return true;
@@ -320,6 +341,7 @@ public partial class MainWindow : Window
         }
         catch (Exception error)
         {
+            ReleaseGesture();
             JobProgress.Value = 0;
             OverallProgressText.Text = "전체 진행률 · 실패";
             SetStatus($"{title} 실패", error.Message);
@@ -329,6 +351,7 @@ public partial class MainWindow : Window
         finally
         {
             _job = null;
+            _jobCollisionOverride = null;
             JobProgress.IsIndeterminate = false;
             CurrentProgressPanel.Visibility = Visibility.Collapsed;
             CurrentJobProgress.IsIndeterminate = false;
@@ -349,12 +372,51 @@ public partial class MainWindow : Window
     {
         foreach (var output in outputs.Take(8)) AddLog(output);
         if (outputs.Count > 8) AddLog($"외 {outputs.Count - 8:N0}개 항목");
+        _lastOutputPath = outputs.Count switch
+        {
+            0 => null,
+            1 => outputs[0],
+            _ => CommonOutputDirectory(outputs)
+        };
         return outputs.Count switch
         {
             0 => "저장된 항목이 없습니다.",
             1 => outputs[0],
             _ => $"{outputs.Count:N0}개 항목 저장"
         };
+    }
+
+    private static string? CommonOutputDirectory(IReadOnlyList<string> outputs)
+    {
+        var directory = Path.GetDirectoryName(outputs[0]);
+        foreach (var output in outputs.Skip(1))
+        {
+            var current = Path.GetDirectoryName(output);
+            while (!string.IsNullOrEmpty(directory) && current != null
+                && !current.Equals(directory, StringComparison.OrdinalIgnoreCase)
+                && !current.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                directory = Path.GetDirectoryName(directory);
+            }
+        }
+        return directory;
+    }
+
+    private void OnOpenResult(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_lastOutputPath)) return;
+        try
+        {
+            var start = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+            if (File.Exists(_lastOutputPath)) start.Arguments = $"/select,\"{_lastOutputPath}\"";
+            else if (Directory.Exists(_lastOutputPath)) start.ArgumentList.Add(_lastOutputPath);
+            else return;
+            Process.Start(start);
+        }
+        catch (Exception error)
+        {
+            TaskDialog.ShowError(this, "탐색기를 열 수 없습니다", error.Message);
+        }
     }
 
     private void AddLog(string message)
@@ -403,6 +465,14 @@ public partial class MainWindow : Window
         _searchTimer.Start();
     }
 
+    private void OnClearSearch(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Clear();
+        _searchTimer.Stop();
+        RefreshContents();
+        SearchBox.Focus();
+    }
+
     private void RefreshContents()
     {
         DiscardPreparedDrag();
@@ -411,6 +481,7 @@ public partial class MainWindow : Window
         EntryGrid.Tag = search.Length > 0;
         NameColumn.Header = search.Length == 0 ? "이름" : "경로";
         NameColumn.SortMemberPath = search.Length == 0 ? nameof(ArchiveRow.Name) : nameof(ArchiveRow.Path);
+        foreach (var column in EntryGrid.Columns) column.SortDirection = null;
         EntryGrid.ItemsSource = rows;
         EmptyState.Visibility = rows.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyTitle.Text = _archive == null ? "압축 파일을 열어 보세요" : search.Length == 0 ? "이 폴더는 비어 있습니다" : "검색 결과가 없습니다";
@@ -450,8 +521,34 @@ public partial class MainWindow : Window
     {
         var count = EntryGrid.Items.Count;
         var selected = EntryGrid.SelectedItems.Count;
-        var scope = SearchBox.Text.Trim().Length > 0 ? "검색 결과 " : "";
-        CountText.Text = selected > 0 ? $"{scope}{count:N0}개 항목 · {selected:N0}개 선택" : $"{scope}{count:N0}개 항목";
+        var isSearch = SearchBox.Text.Trim().Length > 0;
+        var scope = isSearch ? "검색 결과 " : "";
+        if (_contents == null)
+        {
+            CountText.Text = $"{count:N0}개 항목";
+            return;
+        }
+        if (selected > 0)
+        {
+            var selectedBytes = _contents.SelectionSize(SelectedRows());
+            CountText.Text = $"{scope}{count:N0}개 항목 · {selected:N0}개 선택 ({ArchiveRow.FormatBytes(selectedBytes)})";
+            return;
+        }
+        if (!isSearch && _folder.Length == 0 && _contents.FileCount > 0)
+        {
+            var sizeSummary = ArchiveRow.FormatBytes(_contents.TotalSize);
+            if (_contents.TotalSize > 0 && _contents.TotalPackedSize > 0)
+            {
+                var ratio = Math.Clamp(100d * _contents.TotalPackedSize / _contents.TotalSize, 0, 999);
+                CountText.Text = $"{count:N0}개 항목 · 전체 {_contents.FileCount:N0}개 파일 ({sizeSummary}, 압축 {ArchiveRow.FormatBytes(_contents.TotalPackedSize)} · {ratio:0}%)";
+            }
+            else
+            {
+                CountText.Text = $"{count:N0}개 항목 · 전체 {_contents.FileCount:N0}개 파일 ({sizeSummary})";
+            }
+            return;
+        }
+        CountText.Text = $"{scope}{count:N0}개 항목";
     }
 
     private void OnRowDoubleClick(object sender, MouseButtonEventArgs e)
@@ -479,11 +576,26 @@ public partial class MainWindow : Window
         OpenFolderMenu.IsEnabled = ExtractButton.IsEnabled &&
             EntryGrid.SelectedItems.Count == 1 && EntryGrid.SelectedItem is ArchiveRow { IsDirectory: true };
         ExtractSelectionMenu.IsEnabled = ExtractButton.IsEnabled && EntryGrid.SelectedItems.Count > 0;
+        CopyPathMenu.IsEnabled = EntryGrid.SelectedItems.Count > 0;
+        SelectAllMenu.IsEnabled = EntryGrid.Items.Count > 0;
     }
 
     private void OnOpenFolder(object sender, RoutedEventArgs e)
     {
         if (OpenFolderMenu.IsEnabled && EntryGrid.SelectedItem is ArchiveRow row) Navigate(row.Path);
+    }
+
+    private void OnCopyPath(object sender, RoutedEventArgs e)
+    {
+        var rows = SelectedRows();
+        if (rows.Length == 0) return;
+        try { Clipboard.SetText(string.Join(Environment.NewLine, rows.Select(row => row.Path))); }
+        catch (System.Runtime.InteropServices.COMException) { }
+    }
+
+    private void OnSelectAll(object sender, RoutedEventArgs e)
+    {
+        if (EntryGrid.Items.Count > 0) EntryGrid.SelectAll();
     }
 
     private async void OnShortcut(object sender, KeyEventArgs e)
@@ -509,7 +621,21 @@ public partial class MainWindow : Window
                     e.Handled = true;
                     await ShowExtractionAsync(false);
                     break;
+                case Key.T when TestButton.IsEnabled:
+                    e.Handled = true;
+                    await TestArchiveAsync();
+                    break;
             }
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Alt && e.Key == Key.System && e.SystemKey == Key.Up && UpButton.IsEnabled)
+        {
+            OnUp(sender, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F5 && OpenButton.IsEnabled && _archive != null)
+        {
+            e.Handled = true;
+            await OpenArchiveAsync(_archive);
         }
         else if (e.Key == Key.Back && !SearchBox.IsKeyboardFocusWithin && UpButton.IsEnabled)
         {
@@ -518,7 +644,7 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape && SearchBox.IsKeyboardFocusWithin && SearchBox.Text.Length > 0)
         {
-            SearchBox.Clear();
+            OnClearSearch(sender, e);
             e.Handled = true;
         }
         else if (e.Key == Key.Escape && CancelButton.IsEnabled)
@@ -528,15 +654,48 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnFilesDragOver(object sender, DragEventArgs e)
+    private void OnFilesDragEnter(object sender, DragEventArgs e) => UpdateDragOverlay(e);
+
+    private void OnFilesDragOver(object sender, DragEventArgs e) => UpdateDragOverlay(e);
+
+    private void OnFilesDragLeave(object sender, DragEventArgs e) => DropOverlay.Visibility = Visibility.Collapsed;
+
+    private void UpdateDragOverlay(DragEventArgs e)
     {
-        e.Effects = CreateButton.IsEnabled && e.Data.GetDataPresent(DataFormats.FileDrop)
-            ? e.AllowedEffects & DragDropEffects.Copy : DragDropEffects.None;
+        var canDrop = CreateButton.IsEnabled && e.Data.GetDataPresent(DataFormats.FileDrop);
+        e.Effects = canDrop ? e.AllowedEffects & DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
+        if (!canDrop)
+        {
+            DropOverlay.Visibility = Visibility.Collapsed;
+            return;
+        }
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
+        {
+            if (files.Length == 1 && File.Exists(files[0]) && ArchiveService.IsArchivePath(files[0]))
+            {
+                DropOverlayTitle.Text = "압축 파일 열기";
+                DropOverlayHint.Text = Path.GetFileName(files[0]);
+            }
+            else if (files.Length > 1 && files.All(path => File.Exists(path) && ArchiveService.IsArchivePath(path)))
+            {
+                DropOverlayTitle.Text = $"{files.Length:N0}개 압축 파일 풀기";
+                DropOverlayHint.Text = "여기에 놓으면 압축 풀기 옵션을 엽니다.";
+            }
+            else
+            {
+                DropOverlayTitle.Text = "새 압축 만들기";
+                DropOverlayHint.Text = files.Length == 1
+                    ? Path.GetFileName(Path.TrimEndingDirectorySeparator(files[0]))
+                    : $"{files.Length:N0}개 항목을 새 압축으로 묶습니다.";
+            }
+        }
+        DropOverlay.Visibility = Visibility.Visible;
     }
 
     private async void OnFilesDropped(object sender, DragEventArgs e)
     {
+        DropOverlay.Visibility = Visibility.Collapsed;
         e.Handled = true;
         if (!CreateButton.IsEnabled || e.Data.GetData(DataFormats.FileDrop) is not string[] { Length: > 0 } files) return;
         if (files.Length == 1 && File.Exists(files[0]) && ArchiveService.IsArchivePath(files[0]))

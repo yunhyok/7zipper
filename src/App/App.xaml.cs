@@ -41,7 +41,13 @@ public static class Program
             var window = new MainWindow();
             app.MainWindow = window;
             _ = ListenAsync(pipeName, app, stop.Token);
-            window.Loaded += (_, _) => Dispatch(app, request);
+            RoutedEventHandler? onLoaded = null;
+            onLoaded = (_, _) =>
+            {
+                window.Loaded -= onLoaded;
+                Dispatch(app, request);
+            };
+            window.Loaded += onLoaded;
             int exit = app.Run(window);
             stop.Cancel();
             mutex.ReleaseMutex();
