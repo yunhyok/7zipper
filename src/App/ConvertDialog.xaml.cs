@@ -208,7 +208,16 @@ internal partial class ConvertDialog : Window
         CustomVolume.Visibility = VolumeBox.SelectedItem is Choice<ulong?> { Value: null } ? Visibility.Visible : Visibility.Collapsed;
 
     private void OnPerformanceExpanded(object sender, RoutedEventArgs e) =>
-        Dispatcher.InvokeAsync(() => ((FrameworkElement)sender).BringIntoView(), DispatcherPriority.Loaded);
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (sender is not FrameworkElement element) return;
+            var height = element.ActualHeight;
+            var viewport = OptionsScroll.ViewportHeight;
+            if (viewport > 0 && height > viewport)
+                element.BringIntoView(new Rect(0, height - viewport, element.ActualWidth, viewport));
+            else
+                element.BringIntoView();
+        }, DispatcherPriority.Loaded);
 
     private void OnAccept(object sender, RoutedEventArgs e)
     {
