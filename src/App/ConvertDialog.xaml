@@ -5,11 +5,7 @@
         Width="586" Height="740" MinWidth="400" MinHeight="310"
         AllowDrop="True" DragOver="OnInputDragOver" Drop="OnInputDrop" Closed="OnDialogClosed">
     <DockPanel Margin="18">
-        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-            <TextBlock Text="ZIP → 7z 변환" Style="{StaticResource Heading}" />
-            <TextBlock x:Name="SummaryText" Style="{StaticResource Muted}" Margin="0,3,0,0" TextWrapping="Wrap"
-                       Text="여러 ZIP 파일을 선택하면 각각 별도의 7z 파일로 변환합니다. (기본: 최대 압축)" />
-        </StackPanel>
+        <TextBlock DockPanel.Dock="Top" Text="ZIP → 7z 변환" Style="{StaticResource Heading}" Margin="0,0,0,12" />
         <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
             <TextBlock x:Name="ErrorText" Style="{StaticResource DialogError}" Visibility="Collapsed" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -17,11 +13,13 @@
                 <Button Content="변환 시작" Click="OnAccept" IsDefault="True" Style="{StaticResource PrimaryAction}" />
             </StackPanel>
         </StackPanel>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer x:Name="OptionsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,0,7,24">
                 <Border Style="{StaticResource AppPanel}" Padding="12" Margin="0,0,0,10">
                     <StackPanel>
                         <TextBlock Text="변환할 ZIP 파일" Style="{StaticResource SectionTitle}" />
+                        <TextBlock x:Name="SummaryText" Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                   Text="여러 ZIP 파일을 선택하면 각각 별도의 7z 파일로 변환합니다. (기본: 최대 압축)" />
                         <WrapPanel Margin="0,8,0,6">
                             <Button Content="ZIP 파일 추가" Click="OnAddFiles" Style="{StaticResource NavAction}" Margin="0,0,6,0" />
                             <Button x:Name="RemoveButton" Content="선택 제거" Click="OnRemove" Style="{StaticResource NavAction}" IsEnabled="False" />

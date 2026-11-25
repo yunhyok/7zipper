@@ -53,21 +53,29 @@ internal static class CompressionLayoutChecks
         }
         Console.WriteLine("Compression options scroll layout passed at small and standard logical sizes.");
 
+        var filterDialog = (Window)Activator.CreateInstance(typeof(App).Assembly.GetType("SevenZipper.App.ConvertDialog")!,
+            [new[] { @"C:\temp\one.zip", @"C:\temp\two.zip", @"C:\temp\ignored.7z" }, null])!;
+        try
+        {
+            var levelBox = (ComboBox)filterDialog.FindName("LevelBox");
+            var selectedLevel = levelBox.SelectedItem!;
+            Check((int)selectedLevel.GetType().GetProperty("Value")!.GetValue(selectedLevel)! == 9,
+                "ConvertDialog defaults to maximum compression (level 9)");
+            var inputList = (ListBox)filterDialog.FindName("InputList");
+            Check(inputList.Items.Count == 2, "ConvertDialog accepts only ZIP files in input list");
+            var summary = ((TextBlock)filterDialog.FindName("SummaryText")).Text;
+            Check(summary.Contains("2개 ZIP"), "ConvertDialog displays multi-ZIP individual conversion summary");
+            var error = (TextBlock)filterDialog.FindName("ErrorText");
+            Check(error.Visibility == Visibility.Visible, "ConvertDialog warns when non-ZIP files are ignored");
+        }
+        finally { filterDialog.Close(); }
+
         foreach (var size in new[] { new Size(400, 270), new Size(512, 344), new Size(586, 730) })
         {
             var dialog = (Window)Activator.CreateInstance(typeof(App).Assembly.GetType("SevenZipper.App.ConvertDialog")!,
-                [new[] { @"C:\temp\one.zip", @"C:\temp\two.zip", @"C:\temp\ignored.7z" }, null])!;
+                [new[] { @"C:\temp\one.zip", @"C:\temp\two.zip" }, null])!;
             try
             {
-                var levelBox = (ComboBox)dialog.FindName("LevelBox");
-                var selectedLevel = levelBox.SelectedItem!;
-                Check((int)selectedLevel.GetType().GetProperty("Value")!.GetValue(selectedLevel)! == 9,
-                    "ConvertDialog defaults to maximum compression (level 9)");
-                var inputList = (ListBox)dialog.FindName("InputList");
-                Check(inputList.Items.Count == 2, "ConvertDialog accepts only ZIP files in input list");
-                var summary = ((TextBlock)dialog.FindName("SummaryText")).Text;
-                Check(summary.Contains("2개 ZIP"), "ConvertDialog displays multi-ZIP individual conversion summary");
-
                 var content = (FrameworkElement)dialog.Content;
                 void Layout()
                 {
