@@ -15,7 +15,7 @@ public partial class App : Application { }
 
 public static class Program
 {
-    private static readonly HashSet<string> Operations = ["activate", "open", "compress-7z", "compress-zip", "compress-options", "extract-here", "extract-smart"];
+    private static readonly HashSet<string> Operations = ["activate", "open", "compress-7z", "compress-zip", "compress-options", "extract-here", "extract-smart", "convert-7z"];
     private const int RequestLimit = 16 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 

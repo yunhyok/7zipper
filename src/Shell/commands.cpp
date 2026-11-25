@@ -15,7 +15,7 @@ constexpr size_t maxRequestBytes = 16 * 1024 * 1024;
 HMODULE module;
 std::atomic<long> objects, serverLocks, pendingWrites;
 
-enum CommandId { menu, sevenZip, zip, options, extractHere, extractSmart, commandCount };
+enum CommandId { menu, sevenZip, zip, options, extractHere, extractSmart, convertTo7z, commandCount };
 constexpr struct { const wchar_t* title; const char* operation; } commands[] = {
     { L"7Zipper", nullptr },
     { L"7z로 압축", "compress-7z" },
@@ -23,6 +23,7 @@ constexpr struct { const wchar_t* title; const char* operation; } commands[] = {
     { L"압축 옵션…", "compress-options" },
     { L"여기에 풀기", "extract-here" },
     { L"스마트 풀기", "extract-smart" },
+    { L"7z로 변환", "convert-7z" },
 };
 
 std::wstring ModulePath() {
@@ -33,22 +34,29 @@ std::wstring ModulePath() {
     return path;
 }
 
-bool IsArchivePath(const wchar_t* path) noexcept {
+bool IsZipPath(const wchar_t* path) noexcept {
     const auto ext = std::wcsrchr(path, L'.');
     const auto slash = std::wcsrchr(path, L'\\');
     if (!ext || (slash && ext < slash)) return false;
-    for (auto supported : {L".7z", L".zip"}) {
-        if (CompareStringOrdinal(ext, -1, supported, -1, TRUE) == CSTR_EQUAL) return true;
-    }
+    if (CompareStringOrdinal(ext, -1, L".zip", -1, TRUE) == CSTR_EQUAL) return true;
+    if (ext[0] != L'.' || (ext[1] != L'z' && ext[1] != L'Z')) return false;
+    const wchar_t* end = ext + 2;
+    while (*end >= L'0' && *end <= L'9') ++end;
+    return !*end && end - ext >= 4;
+}
+
+bool IsArchivePath(const wchar_t* path) noexcept {
+    if (IsZipPath(path)) return true;
+    const auto ext = std::wcsrchr(path, L'.');
+    const auto slash = std::wcsrchr(path, L'\\');
+    if (!ext || (slash && ext < slash)) return false;
+    if (CompareStringOrdinal(ext, -1, L".7z", -1, TRUE) == CSTR_EQUAL) return true;
     if (ext - path >= 3 && CompareStringOrdinal(ext - 3, 3, L".7z", 3, TRUE) == CSTR_EQUAL) {
         const wchar_t* digit = ext + 1;
         while (*digit >= L'0' && *digit <= L'9') ++digit;
         if (!*digit && digit > ext + 1) return true;
     }
-    if (ext[0] != L'.' || (ext[1] != L'z' && ext[1] != L'Z')) return false;
-    const wchar_t* end = ext + 2;
-    while (*end >= L'0' && *end <= L'9') ++end;
-    return !*end && end - ext >= 4;
+    return false;
 }
 
 DWORD PhysicalFileAttributes(std::wstring_view path) noexcept {
@@ -216,7 +224,7 @@ public:
         *result = ECS_HIDDEN;
         DWORD count;
         if (!items || FAILED(items->GetCount(&count)) || !count) return S_OK;
-        if (id_ == extractHere || id_ == extractSmart) {
+        if (id_ == extractHere || id_ == extractSmart || id_ == convertTo7z) {
             // Filesystem attributes and extension only; no archive is opened inside Explorer.
             for (DWORD index = 0; index < count; ++index) {
                 IShellItem* rawItem = nullptr;
@@ -225,7 +233,7 @@ public:
                 wchar_t* rawPath = nullptr;
                 if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &rawPath))) return S_OK;
                 TaskString path(rawPath);
-                if (!IsArchivePath(path.get())) return S_OK;
+                if (id_ == convertTo7z ? !IsZipPath(path.get()) : !IsArchivePath(path.get())) return S_OK;
                 // Explorer can expose an archive file as a browsable shell folder.
                 const DWORD attrs = PhysicalFileAttributes(path.get());
                 if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY)) return S_OK;

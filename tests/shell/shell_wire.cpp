@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -70,10 +71,10 @@ int wmain(int argc, wchar_t** argv) {
         IEnumExplorerCommand* rawCommands = nullptr;
         assert(SUCCEEDED(root->EnumSubCommands(&rawCommands)));
         ComPtr<IEnumExplorerCommand> commands(rawCommands);
-        IExplorerCommand* rawActions[5]{};
+        IExplorerCommand* rawActions[6]{};
         ULONG fetched = 0;
-        assert(commands->Next(5, rawActions, &fetched) == S_OK && fetched == 5);
-        std::array<ComPtr<IExplorerCommand>, 5> actions;
+        assert(commands->Next(6, rawActions, &fetched) == S_OK && fetched == 6);
+        std::array<ComPtr<IExplorerCommand>, 6> actions;
         for (size_t i = 0; i < actions.size(); ++i) actions[i].reset(rawActions[i]);
 
         GUID jobId;
@@ -113,16 +114,22 @@ int wmain(int argc, wchar_t** argv) {
         const auto archive = job / L"Explorer archive.zip";
         constexpr char emptyZip[22] = {'P', 'K', '\x05', '\x06'};
         assert(std::ofstream(archive, std::ios::binary).write(emptyZip, sizeof(emptyZip)));
+        const auto zipPart = job / L"split.z01";
+        assert(std::ofstream(zipPart, std::ios::binary).put('x'));
         const auto splitPart = job / L"split.7z.002";
         assert(std::ofstream(splitPart, std::ios::binary).put('x'));
         const auto notSplit = job / L"split.7z.txt";
         assert(std::ofstream(notSplit, std::ios::binary).put('x'));
         const auto folder = job / L"Ordinary folder.7z";
         assert(fs::create_directory(folder));
-        const std::pair<fs::path, EXPCMDSTATE> checks[] = {
-            {archive, ECS_ENABLED}, {splitPart, ECS_ENABLED}, {notSplit, ECS_HIDDEN}, {folder, ECS_HIDDEN}
+        const std::tuple<fs::path, EXPCMDSTATE, EXPCMDSTATE> checks[] = {
+            {archive, ECS_ENABLED, ECS_ENABLED},
+            {zipPart, ECS_ENABLED, ECS_ENABLED},
+            {splitPart, ECS_ENABLED, ECS_HIDDEN},
+            {notSplit, ECS_HIDDEN, ECS_HIDDEN},
+            {folder, ECS_HIDDEN, ECS_HIDDEN}
         };
-        for (const auto& [path, expected] : checks) {
+        for (const auto& [path, expectedExtract, expectedConvert] : checks) {
             PIDLIST_ABSOLUTE pidl = nullptr;
             assert(SUCCEEDED(SHParseDisplayName(path.c_str(), nullptr, &pidl, 0, nullptr)));
             PCIDLIST_ABSOLUTE selection[] = {pidl};
@@ -131,9 +138,10 @@ int wmain(int argc, wchar_t** argv) {
             CoTaskMemFree(pidl);
             ComPtr<IShellItemArray> singleItem(rawSelection);
             for (auto action : {3, 4})
-                assert(SUCCEEDED(actions[action]->GetState(singleItem.get(), FALSE, &state)) && state == expected);
+                assert(SUCCEEDED(actions[action]->GetState(singleItem.get(), FALSE, &state)) && state == expectedExtract);
+            assert(SUCCEEDED(actions[5]->GetState(singleItem.get(), FALSE, &state)) && state == expectedConvert);
         }
-        assert(fs::remove(archive) && fs::remove(splitPart) && fs::remove(notSplit) && fs::remove(folder));
+        assert(fs::remove(archive) && fs::remove(zipPart) && fs::remove(splitPart) && fs::remove(notSplit) && fs::remove(folder));
 
         assert(SUCCEEDED(actions[0]->Invoke(items.get(), nullptr)));
         for (int retry = 0; retry < 500 && !fs::exists(capture); ++retry) Sleep(10);

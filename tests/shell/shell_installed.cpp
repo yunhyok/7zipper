@@ -24,6 +24,7 @@ constexpr struct Verb {
     {L"compress-zip", L"ZIP으로 압축", L".zip"},
     {L"extract-here", L"여기에 풀기", nullptr},
     {L"extract-smart", L"스마트 풀기", nullptr},
+    {L"convert-7z", L"7z로 변환", L".7z"},
 };
 constexpr auto filename = L"탐색기 한글 📦 & 파일.txt";
 constexpr std::string_view fixture = "7Zipper installed context menu integration\n";
@@ -278,7 +279,7 @@ int wmain(int argc, wchar_t** argv) {
         std::wprintf(L"Usage: shell_installed <existing-artifacts-directory> icon\n"
                      L"       shell_installed <existing-artifacts-directory> <7za.exe> direct|classic [verb]\n"
                      L"       shell_installed <existing-artifacts-directory> <7za.exe> library <verb> <published-shell-dll>\n"
-                     L"Verbs: compress-7z, compress-zip, extract-here, extract-smart\n");
+                     L"Verbs: compress-7z, compress-zip, extract-here, extract-smart, convert-7z\n");
         return 2;
     }
     if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) &&
@@ -311,15 +312,17 @@ int wmain(int argc, wchar_t** argv) {
         const auto directory = fs::absolute(argv[1]) / (std::wstring(L"shell-installed-") + std::wstring(mode) + L"-" + id);
         if (!fs::create_directory(directory)) return 1;
         const bool extracting = !iconOnly && !command->outputExtension;
+        const bool converting = !iconOnly && command->option == L"convert-7z";
         const auto verifier = iconOnly ? fs::path{} : fs::absolute(argv[2]);
-        const auto source = directory / (extracting ? L"선택한 압축 📦.7z" : filename);
+        const auto source = directory / (extracting ? L"선택한 압축 📦.7z" : converting ? L"선택한 압축 📦.zip" : filename);
         constexpr auto secondFile = L"두 번째.txt";
         constexpr std::string_view secondFixture = "Second archive root\n";
-        if (extracting) {
+        if (extracting || converting) {
             const auto seed = directory / L"seed";
             if (!fs::create_directory(seed) || !(std::ofstream(seed / filename, std::ios::binary) << fixture) ||
                 !(std::ofstream(seed / secondFile, std::ios::binary) << secondFixture)) return 1;
-            if (!Run7za(verifier, L"a -t7z -y " + Quote(source) + L" -- " + Quote(filename) + L" " + Quote(secondFile), seed)) return 1;
+            const std::wstring typeArg = converting ? L"-tzip" : L"-t7z";
+            if (!Run7za(verifier, L"a " + typeArg + L" -y " + Quote(source) + L" -- " + Quote(filename) + L" " + Quote(secondFile), seed)) return 1;
         } else if (!(std::ofstream(source, std::ios::binary) << fixture)) return 1;
         std::wprintf(L"Fixture: %ls\n", source.c_str());
         PIDLIST_ABSOLUTE rawItem = nullptr;

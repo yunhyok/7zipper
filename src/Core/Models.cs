@@ -34,6 +34,19 @@ public sealed class ExtractionOptions
     public ulong MemoryLimitBytes { get; set; }
 }
 
+public sealed class ConversionOptions
+{
+    public int Level { get; set; } = 9;
+    public int Threads { get; set; } = Environment.ProcessorCount;
+    public ulong MemoryLimitBytes { get; set; }
+    public ulong VolumeBytes { get; set; }
+    public string? OutputDirectory { get; set; }
+    public string? SourcePassword { get; set; }
+    public string? OutputPassword { get; set; }
+    public bool EncryptHeaders { get; set; }
+    public bool DeleteSourceAfterSuccess { get; set; }
+}
+
 public sealed class ArchiveException(string message, int status = 2) : Exception(message)
 {
     public int Status { get; } = status;

@@ -12,6 +12,8 @@ internal static class ArchivePaths
 {
     public const string OpenFilter =
         "압축 파일 (*.7z, *.zip, *.001, *.z01)|*.7z;*.zip;*.001;*.z01|모든 파일 (*.*)|*.*";
+    public const string ZipFilter =
+        "ZIP 압축 파일 (*.zip, *.z01)|*.zip;*.z01|모든 파일 (*.*)|*.*";
 
     public static string AbsolutePath(string text, string label)
     {

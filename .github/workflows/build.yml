@@ -60,7 +60,7 @@ jobs:
           $app = Join-Path $PWD 'artifacts/publish/7Zipper.exe'
           if (Get-Process 7Zipper -ErrorAction SilentlyContinue) { throw 'Unexpected existing application.' }
           try {
-            foreach ($verb in 'compress-7z','compress-zip','extract-here','extract-smart') {
+            foreach ($verb in 'compress-7z','compress-zip','extract-here','extract-smart','convert-7z') {
               & ./build/shell/tests/shell_installed.exe artifacts $verifier library $verb ./artifacts/publish/SevenZipper.Shell.dll
               if ($LASTEXITCODE -ne 0) { throw "Packaged app command failed: $verb" }
             }

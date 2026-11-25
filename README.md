@@ -22,6 +22,7 @@ Windows용 7z·ZIP 압축 프로그램. 공식 LZMA SDK와 Zstandard 기반 네�
 | 기본 압축 | 7z / LZMA2 |
 | ZIP | Deflate·Store·Zstandard, ZIP64 |
 | 암호 | 7z AES-256·파일명 암호화, ZIP AES-256, 기존 ZipCrypto 해제 |
+| ZIP → 7z 변환 | 단일·다중 ZIP 파일을 각각 7z로 변환 (기본: 최대 압축, 원본 유지 또는 완료 후 삭제 선택) |
 | 폴더별 압축 | 선택한 폴더마다 별도 압축파일 생성 |
 | 진행률 | 전체 진행률·완료 개수와 현재 압축 파일 진행률을 구분. 여러 압축 파일 작업은 대기 항목까지 포함 |
 | 분할 압축 | 7z `.7z.001…`, ZIP `.z01…` + 마지막 `.zip` |
@@ -66,7 +67,7 @@ pwsh ./scripts/build.ps1 -Test -Publish -Installer
 dotnet run --project tests/SevenZipper.Tests -c Release -- --managed
 ```
 
-최신 오류 수정·UI/UX 개선 검사는 [v0.1.5 검증 기록](docs/validation-v0.1.5.md), 진행률·옵션 화면 검사는 [v0.1.4 검증 기록](docs/validation-v0.1.4.md), 메뉴·배포 앱 검사는 [v0.1.3 검증 기록](docs/validation-v0.1.3.md), 파일명·드래그 검사는 [v0.1.2 검증 기록](docs/validation-v0.1.2.md), 네이티브 엔진·UI·성능 실측 결과는 [초기 검증 기록](docs/validation.md) 참조.
+최신 ZIP → 7z 변환 검사는 [v0.1.6 검증 기록](docs/validation-v0.1.6.md), 오류 수정·UI/UX 개선 검사는 [v0.1.5 검증 기록](docs/validation-v0.1.5.md), 진행률·옵션 화면 검사는 [v0.1.4 검증 기록](docs/validation-v0.1.4.md), 메뉴·배포 앱 검사는 [v0.1.3 검증 기록](docs/validation-v0.1.3.md), 파일명·드래그 검사는 [v0.1.2 검증 기록](docs/validation-v0.1.2.md), 네이티브 엔진·UI·성능 실측 결과는 [초기 검증 기록](docs/validation.md) 참조.
 
 ## 05 / 구성 및 라이선스
 

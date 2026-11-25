@@ -15,8 +15,11 @@ public sealed partial class ArchiveService
     [GeneratedRegex(@"\.7z\.\d+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SevenZipVolume();
 
+    public static bool IsZipArchivePath(string path) => path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+        || ZipVolume().IsMatch(path);
+
     public static bool IsArchivePath(string path) => path.EndsWith(".7z", StringComparison.OrdinalIgnoreCase)
-        || path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || ZipVolume().IsMatch(path) || SevenZipVolume().IsMatch(path);
+        || IsZipArchivePath(path) || SevenZipVolume().IsMatch(path);
 
     public static string NormalizeArchivePath(string path)
     {
@@ -418,6 +421,204 @@ public sealed partial class ArchiveService
 
     private static void WriteZone(string output, string zone)
         => File.WriteAllText(output + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=" + zone + "\r\n");
+
+    public async Task<IReadOnlyList<string>> ConvertZipTo7zAsync(IReadOnlyList<string> paths, ConversionOptions options,
+        IProgress<ArchiveProgress>? progress = null, CancellationToken cancellation = default)
+    {
+        await Queue.WaitAsync(cancellation);
+        try
+        {
+            if (paths.Count == 0) throw new ArchiveException("변환할 ZIP 파일을 선택하세요.");
+            if (options.Level < 0 || options.Level > 9) throw new ArchiveException("압축 수준이 올바르지 않습니다.");
+            if (options.VolumeBytes != 0 && options.VolumeBytes < 64 * 1024) throw new ArchiveException("분할 크기는 64 KiB 이상이어야 합니다.");
+            if (options.EncryptHeaders && string.IsNullOrEmpty(options.OutputPassword))
+                throw new ArchiveException("파일명 암호화에는 암호가 필요합니다.");
+            foreach (var input in paths)
+                if (!IsZipArchivePath(input)) throw new ArchiveException($"ZIP 파일만 7z로 변환할 수 있습니다: {input}");
+
+            var archives = paths.Select(NormalizeArchivePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            string? explicitOutput = null;
+            if (!string.IsNullOrWhiteSpace(options.OutputDirectory))
+            {
+                explicitOutput = Path.GetFullPath(options.OutputDirectory);
+                if (File.Exists(explicitOutput))
+                    throw new ArchiveException("저장 위치에 같은 이름의 파일이 있습니다. 폴더 경로를 입력하세요.");
+                PathSafety.RejectReparseAncestors(explicitOutput);
+                Directory.CreateDirectory(explicitOutput);
+            }
+
+            var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var jobs = archives.Select((archive, index) =>
+            {
+                var targetDir = explicitOutput ?? Path.GetDirectoryName(archive)!;
+                var stem = ArchiveStem(archive);
+                var desired = Path.Combine(targetDir, (string.IsNullOrEmpty(stem) ? "변환 파일" : stem) + ".7z");
+                var output = UniqueOutput(desired, reserved);
+                reserved.Add(output);
+                return (archive, output, index);
+            }).ToArray();
+
+            var memory = MemoryBudget.Resolve(options.MemoryLimitBytes);
+            int threads = Math.Clamp(options.Threads, 1, Environment.ProcessorCount);
+            if (jobs.Length == 1)
+                return await ConvertOneZipTo7zAsync(jobs[0].archive, jobs[0].output, options, memory, threads, progress, cancellation);
+
+            int parallel = Math.Max(1, Math.Min(jobs.Length, Math.Min(4, Math.Min(threads, (int)Math.Min(int.MaxValue, memory / (256UL * 1024 * 1024))))));
+            var outputs = new ConcurrentBag<string>();
+            var batch = new BatchProgress(jobs.Length, progress);
+            await Parallel.ForEachAsync(jobs, new ParallelOptions { MaxDegreeOfParallelism = parallel, CancellationToken = cancellation }, async (item, token) =>
+            {
+                var job = batch[item.index];
+                job.Report(new("파일 확인", 0, 0, item.archive));
+                var completed = await ConvertOneZipTo7zAsync(item.archive, item.output, options,
+                    memory / (ulong)parallel, Math.Max(1, threads / parallel), job, token);
+                foreach (var output in completed) outputs.Add(output);
+                job.Complete();
+            });
+            return outputs.Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+        finally { Queue.Release(); }
+    }
+
+    private async Task<IReadOnlyList<string>> ConvertOneZipTo7zAsync(string zipPath, string targetOutput,
+        ConversionOptions options, ulong memory, int threads, IProgress<ArchiveProgress>? progress, CancellationToken cancellation)
+    {
+        PathSafety.RejectReparseAncestors(targetOutput);
+        if (OutputExists(targetOutput)) throw new ArchiveException($"출력 경로에 압축 파일 또는 분할 볼륨이 이미 있습니다: {targetOutput}");
+        var targetDir = Path.GetDirectoryName(targetOutput)!;
+        PathSafety.RejectReparseAncestors(targetDir);
+        Directory.CreateDirectory(targetDir);
+
+        string? sourcePassword = options.SourcePassword;
+        bool retried = false;
+        string? extractStage = null;
+        string? createStage = null;
+        var logicalJobId = Guid.NewGuid().ToString("N");
+        var sourceVolumes = options.DeleteSourceAfterSuccess ? ProtectedSources([zipPath]) : null;
+        var published = new List<string>();
+        try
+        {
+            try
+            {
+                List<ArchiveEntry> entries;
+                ulong totalBytes;
+                while (true)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    if (extractStage != null) { PathSafety.DeleteStage(extractStage); extractStage = null; }
+                    progress?.Report(new("파일 확인", 0, 0, zipPath, logicalJobId));
+                    try
+                    {
+                        entries = await ListInternalAsync(zipPath, sourcePassword, memory, cancellation);
+                        if (entries.Count == 0)
+                            throw new ArchiveException($"비어 있는 ZIP 파일은 7z로 변환할 수 없습니다: {Path.GetFileName(zipPath)}");
+                        totalBytes = entries.Aggregate(0UL, (sum, entry) => entry.IsDirectory ? sum : checked(sum + entry.Size));
+                        extractStage = PathSafety.CreateStage(targetDir);
+                        var extractProgress = new ConversionPhaseProgress(progress, logicalJobId, "ZIP 읽기", 0, totalBytes);
+                        await WorkerHost.ExecuteAsync(new()
+                        {
+                            Operation = "extract",
+                            Archive = zipPath,
+                            Destination = extractStage,
+                            Password = sourcePassword,
+                            Threads = threads,
+                            MemoryLimitBytes = memory
+                        }, extractProgress, cancellation);
+                        break;
+                    }
+                    catch (ArchiveException error) when (error.IsPasswordError && ResolvePasswordAsync != null)
+                    {
+                        await passwordGate.WaitAsync(cancellation);
+                        try { sourcePassword = await ResolvePasswordAsync(zipPath, retried || sourcePassword != null); }
+                        finally { passwordGate.Release(); }
+                        if (sourcePassword == null) throw new OperationCanceledException(cancellation);
+                        retried = true;
+                    }
+                }
+
+                var roots = await Task.Run(() => Directory.EnumerateFileSystemEntries(extractStage)
+                    .Order(StringComparer.OrdinalIgnoreCase).ToArray(), cancellation).ConfigureAwait(false);
+                if (roots.Length == 0)
+                    throw new ArchiveException($"변환할 항목이 없습니다: {Path.GetFileName(zipPath)}");
+                var items = await Task.Run(() => EnumerateInputs(roots, targetOutput, cancellation), cancellation).ConfigureAwait(false);
+
+                createStage = PathSafety.CreateStage(targetDir);
+                var stagedArchive = Path.Combine(createStage, Path.GetFileName(targetOutput));
+                var createOptions = new CompressionOptions
+                {
+                    Format = ArchiveFormat.SevenZip,
+                    Level = options.Level,
+                    Threads = threads,
+                    MemoryLimitBytes = memory,
+                    VolumeBytes = options.VolumeBytes,
+                    Password = options.OutputPassword,
+                    EncryptHeaders = options.EncryptHeaders,
+                    PerFolder = false,
+                    OutputPath = stagedArchive
+                };
+                var compressProgress = new ConversionPhaseProgress(progress, logicalJobId, "7z 압축", totalBytes, totalBytes);
+                await WorkerHost.ExecuteAsync(new()
+                {
+                    Operation = "create",
+                    Archive = stagedArchive,
+                    Inputs = items,
+                    Create = createOptions,
+                    Threads = threads,
+                    MemoryLimitBytes = memory
+                }, compressProgress, cancellation);
+
+                var artifacts = Directory.GetFiles(createStage).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+                if (artifacts.Length == 0) throw new ArchiveException("압축 엔진이 출력 파일을 생성하지 않았습니다.");
+                var zone = PathSafety.SupportsNamedStreams(targetDir) ? ReadZone(zipPath) : null;
+                foreach (var file in artifacts)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    var target = Path.Combine(targetDir, Path.GetFileName(file));
+                    PathSafety.RejectReparseAncestors(target);
+                    if (zone != null) WriteZone(file, zone);
+                    File.Move(file, target, false);
+                    published.Add(target);
+                }
+            }
+            catch
+            {
+                foreach (var path in published) try { File.Delete(path); } catch (IOException) { }
+                throw;
+            }
+
+            if (sourceVolumes != null)
+            {
+                foreach (var sourceVolume in sourceVolumes)
+                {
+                    if (!File.Exists(sourceVolume)) continue;
+                    PathSafety.RejectReparseAncestors(sourceVolume);
+                    var attrs = File.GetAttributes(sourceVolume);
+                    if ((attrs & FileAttributes.ReadOnly) != 0)
+                        File.SetAttributes(sourceVolume, attrs & ~FileAttributes.ReadOnly);
+                    File.Delete(sourceVolume);
+                }
+            }
+            return published;
+        }
+        finally
+        {
+            if (extractStage != null) PathSafety.DeleteStage(extractStage);
+            if (createStage != null) PathSafety.DeleteStage(createStage);
+        }
+    }
+
+    private sealed class ConversionPhaseProgress(IProgress<ArchiveProgress>? inner, string jobId, string stage, ulong byteOffset, ulong phaseTotal) : IProgress<ArchiveProgress>
+    {
+        public void Report(ArchiveProgress value)
+        {
+            if (inner == null) return;
+            var total = phaseTotal > 0 ? checked(phaseTotal * 2) : value.TotalBytes;
+            var done = phaseTotal > 0
+                ? checked(byteOffset + Math.Min(value.CompletedBytes, phaseTotal))
+                : value.CompletedBytes;
+            inner.Report(value with { Stage = stage, CompletedBytes = done, TotalBytes = total, JobId = jobId });
+        }
+    }
 
     public async Task TestAsync(string path, string? password = null, IProgress<ArchiveProgress>? progress = null, CancellationToken cancellation = default)
     {

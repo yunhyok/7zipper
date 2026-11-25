@@ -50,6 +50,10 @@ CompleteAggregate(2);
 CheckBatch(aggregateReports, 3, "deterministic batch");
 
 Check(PathSafety.IsDeviceName("CON") && PathSafety.IsDeviceName("NUL.txt") && !PathSafety.IsDeviceName("console.txt"), "device name check");
+Check(new ConversionOptions().Level == 9, "ZIP to 7z conversion defaults to maximum compression");
+Check(ArchiveService.IsZipArchivePath("a.zip") && ArchiveService.IsZipArchivePath("a.z01") && ArchiveService.IsZipArchivePath("a.Z12")
+    && !ArchiveService.IsZipArchivePath("a.7z") && !ArchiveService.IsZipArchivePath("a.7z.001") && !ArchiveService.IsZipArchivePath("a.txt"),
+    "IsZipArchivePath distinguishes ZIP and split ZIP volumes");
 var stemMethod = typeof(ArchiveService).GetMethod("ArchiveStem", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
 Check((string)stemMethod.Invoke(null, [@"C:\temp\report..zip"])! == "report", "archive stem trims trailing dots");
 Check((string)stemMethod.Invoke(null, [@"C:\temp\CON.zip"])! == "CON_", "archive stem avoids Windows device names");
@@ -321,6 +325,52 @@ using (var canceled = new CancellationTokenSource())
     Check(wasCanceled && !File.Exists(Path.Combine(root, "active-cancel.7z")), "active cancel removes unfinished output");
     Check(!Directory.GetDirectories(root).Any(p => Path.GetFileName(p).StartsWith(".7zipper-")), "active cancel staging cleanup");
 }
+Console.WriteLine("TEST zip-to-7z conversion");
+var convertDir = Path.Combine(root, "convert-work");
+Directory.CreateDirectory(convertDir);
+var zipOne = Path.Combine(convertDir, "alpha.zip");
+var zipTwo = Path.Combine(convertDir, "beta.zip");
+var zipEncrypted = Path.Combine(convertDir, "secret.zip");
+File.Copy(Path.Combine(root, "Zip-False-False-False.zip"), zipOne);
+File.Copy(Path.Combine(root, "Zip-False-False-False.zip"), zipTwo);
+File.Copy(Path.Combine(root, "Zip-True-False-False.zip"), zipEncrypted);
+var existingTarget = Path.Combine(convertDir, "alpha.7z");
+await File.WriteAllTextAsync(existingTarget, "existing-7z");
+var convertReports = new List<ArchiveProgress>();
+service.ResolvePasswordAsync = (_, _) => Task.FromResult<string?>("비밀 pass123!");
+var converted = await service.ConvertZipTo7zAsync([zipOne, zipTwo, zipEncrypted], new ConversionOptions
+{
+    Threads = 2,
+    MemoryLimitBytes = 512UL * 1024 * 1024
+}, new ImmediateProgress(convertReports.Add));
+CheckBatch(convertReports, 3, "multi-zip to 7z conversion");
+Check(converted.Count == 3 && converted.All(p => p.EndsWith(".7z", StringComparison.OrdinalIgnoreCase) && File.Exists(p)),
+    "each selected ZIP converts to an individual 7z archive");
+Check(await File.ReadAllTextAsync(existingTarget) == "existing-7z"
+    && converted.Contains(Path.Combine(convertDir, "alpha (2).7z")),
+    "conversion preserves existing 7z archive using unique name");
+Check(File.Exists(zipOne) && File.Exists(zipTwo) && File.Exists(zipEncrypted),
+    "source ZIP files remain intact by default");
+foreach (var output7z in converted)
+{
+    await service.TestAsync(output7z);
+    var verifyDir = Path.Combine(convertDir, "verify-" + Path.GetFileNameWithoutExtension(output7z));
+    await service.ExtractAsync(output7z, new() { DestinationDirectory = verifyDir, Mode = ExtractionMode.Here });
+    foreach (var (relative, hash) in hashes)
+        Check(Hash(Path.Combine(verifyDir, Path.GetFileName(source), relative)) == hash, "converted 7z hash " + relative);
+    Check(Directory.Exists(Path.Combine(verifyDir, Path.GetFileName(source), "empty")), "converted 7z preserves empty directory");
+}
+var disposableZip = Path.Combine(convertDir, "remove-me.zip");
+File.Copy(zipOne, disposableZip);
+var deletedOutputs = await service.ConvertZipTo7zAsync([disposableZip], new ConversionOptions
+{
+    DeleteSourceAfterSuccess = true,
+    Threads = 2,
+    MemoryLimitBytes = 512UL * 1024 * 1024
+});
+Check(deletedOutputs.Count == 1 && File.Exists(deletedOutputs[0]) && !File.Exists(disposableZip),
+    "DeleteSourceAfterSuccess removes source ZIP only after 7z is created");
+
 Console.WriteLine($"PASS {assertions} assertions; fixtures: {root}");
 return 0;
 

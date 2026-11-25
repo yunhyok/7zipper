@@ -112,6 +112,9 @@ public partial class MainWindow : Window
                             Mode = request.Operation == "extract-here" ? ExtractionMode.Here : ExtractionMode.Smart
                         });
                         break;
+                    case "convert-7z":
+                        await ConvertZipTo7zAsync(request.Paths, new ConversionOptions { Level = 9 });
+                        break;
                 }
             }
         }
@@ -205,6 +208,27 @@ public partial class MainWindow : Window
                     options.Password = candidate;
                     return await _service.ExtractAsync(paths[0], options, progress, token);
                 }, token);
+            return DescribeOutputs(outputs);
+        });
+
+    private async void OnConvert(object sender, RoutedEventArgs e)
+    {
+        IReadOnlyList<string> initial = _archive != null && ArchiveService.IsZipArchivePath(_archive) ? [_archive] : [];
+        await ShowConvertAsync(initial, initial.Count > 0 ? _password : null);
+    }
+
+    private async Task ShowConvertAsync(IReadOnlyList<string> paths, string? sourcePassword = null)
+    {
+        if (!ConvertButton.IsEnabled) return;
+        var dialog = new ConvertDialog(paths, sourcePassword) { Owner = this };
+        if (DuringDialog(dialog.ShowDialog) == true && dialog.Options is { } options)
+            await ConvertZipTo7zAsync(dialog.Inputs, options);
+    }
+
+    private Task<bool> ConvertZipTo7zAsync(IReadOnlyList<string> paths, ConversionOptions options) =>
+        RunJobAsync("7z 변환", async (progress, token) =>
+        {
+            var outputs = await _service.ConvertZipTo7zAsync(paths, options, progress, token);
             return DescribeOutputs(outputs);
         });
 
@@ -452,7 +476,7 @@ public partial class MainWindow : Window
     private void UpdateControls()
     {
         var idle = _job == null && !_nativeDrag && !_closeRequested;
-        CreateButton.IsEnabled = OpenButton.IsEnabled = idle;
+        CreateButton.IsEnabled = OpenButton.IsEnabled = ConvertButton.IsEnabled = idle;
         ExtractButton.IsEnabled = TestButton.IsEnabled = Navigation.IsEnabled = idle && _archive != null;
         CancelButton.IsEnabled = _job is { IsCancellationRequested: false } || _preparedDrag != null;
         RootButton.IsEnabled = UpButton.IsEnabled = _folder.Length != 0 || SearchBox.Text.Length != 0;
@@ -624,6 +648,11 @@ public partial class MainWindow : Window
                 case Key.T when TestButton.IsEnabled:
                     e.Handled = true;
                     await TestArchiveAsync();
+                    break;
+                case Key.D7 or Key.NumPad7 when ConvertButton.IsEnabled:
+                    e.Handled = true;
+                    IReadOnlyList<string> initial = _archive != null && ArchiveService.IsZipArchivePath(_archive) ? [_archive] : [];
+                    await ShowConvertAsync(initial, initial.Count > 0 ? _password : null);
                     break;
             }
         }

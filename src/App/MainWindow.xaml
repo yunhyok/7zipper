@@ -14,34 +14,41 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel Margin="0,0,0,10">
+        <StackPanel Margin="0,0,0,6">
             <WrapPanel x:Name="Actions">
-                <Button x:Name="CreateButton" Click="OnCreate" Style="{StaticResource PrimaryAction}" Margin="0,0,6,0"
+                <Button x:Name="CreateButton" Click="OnCreate" Style="{StaticResource PrimaryAction}" Padding="10,7" Margin="0,0,5,4"
                         ToolTip="새 압축 (Ctrl+N)" AutomationProperties.Name="새 압축">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" Margin="0,0,7,0" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" Margin="0,0,6,0" />
                         <TextBlock Text="새 압축" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="OpenButton" Click="OnOpen" Style="{StaticResource Action}" Margin="0,0,6,0"
+                <Button x:Name="OpenButton" Click="OnOpen" Style="{StaticResource Action}" Padding="10,7" Margin="0,0,5,4"
                         ToolTip="압축 파일 열기 (Ctrl+O)" AutomationProperties.Name="압축 파일 열기">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" Margin="0,0,7,0" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" Margin="0,0,6,0" />
                         <TextBlock Text="열기" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="ExtractButton" Click="OnExtract" Style="{StaticResource Action}" Margin="0,0,6,0"
+                <Button x:Name="ExtractButton" Click="OnExtract" Style="{StaticResource Action}" Padding="10,7" Margin="0,0,5,4"
                         ToolTip="압축 풀기 (Ctrl+E)" AutomationProperties.Name="압축 풀기">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" Margin="0,0,7,0" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" Margin="0,0,6,0" />
                         <TextBlock Text="압축 풀기" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="TestButton" Click="OnTest" Style="{StaticResource Action}"
+                <Button x:Name="TestButton" Click="OnTest" Style="{StaticResource Action}" Padding="10,7" Margin="0,0,5,4"
                         ToolTip="압축 파일 무결성 검사 (Ctrl+T)" AutomationProperties.Name="무결성 검사">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE9D9;" Margin="0,0,7,0" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE9D9;" Margin="0,0,6,0" />
                         <TextBlock Text="무결성 검사" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="ConvertButton" Click="OnConvert" Style="{StaticResource Action}" Padding="10,7" Margin="0,0,0,4"
+                        ToolTip="ZIP 파일을 7z로 변환 (Ctrl+7)" AutomationProperties.Name="7z 변환">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8AB;" Margin="0,0,6,0" />
+                        <TextBlock Text="7z 변환" />
                     </StackPanel>
                 </Button>
             </WrapPanel>

@@ -1,4 +1,4 @@
-#define AppVersion "0.1.5"
+#define AppVersion "0.1.6"
 #define ShellClsid "9DF247FA-3897-4193-8F57-58062056862D"
 #ifndef PublishDir
   #define PublishDir "..\artifacts\publish"
