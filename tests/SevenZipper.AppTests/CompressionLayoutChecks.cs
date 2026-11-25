@@ -95,9 +95,20 @@ internal static class CompressionLayoutChecks
                 Layout();
 
                 var memory = (TextBox)dialog.FindName("MemoryBox");
-                var top = memory.TransformToAncestor(scroll).Transform(new Point()).Y;
+                // Allow the Fluent theme Expander slide animation to settle before reading visual bounds.
+                var settled = DateTime.UtcNow.AddMilliseconds(400);
+                double top;
+                while (true)
+                {
+                    top = memory.TransformToAncestor(scroll).Transform(new Point()).Y;
+                    if (top >= 0 && top + memory.ActualHeight <= scroll.ViewportHeight + 1) break;
+                    if (DateTime.UtcNow >= settled) break;
+                    Thread.Sleep(20);
+                    dialog.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+                    Layout();
+                }
                 Check(top >= 0 && top + memory.ActualHeight <= scroll.ViewportHeight + 1,
-                    $"ConvertDialog expanding performance reveals its fields at {size}");
+                    $"ConvertDialog expanding performance reveals its fields at {size} (top={top:0.#}, h={memory.ActualHeight:0.#}, vp={scroll.ViewportHeight:0.#}, off={scroll.VerticalOffset:0.#}, expH={performance.ActualHeight:0.#})");
 
                 scroll.ScrollToEnd();
                 Layout();
